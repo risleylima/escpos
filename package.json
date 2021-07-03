@@ -1,5 +1,5 @@
 {
-  "name": "rlima-escpos",
+  "name": "@rlima/escpos",
   "version": "0.0.1",
   "description": "Library to deal with ESCPOS using some adapters",
   "main": "index.js",
