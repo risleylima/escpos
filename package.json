@@ -5,7 +5,7 @@
   "main": "index.js",
   "author": "Rlima Info",
   "license": "MIT",
-  "private": true,
+  "private": false,
   "dependencies": {
     "get-pixels": "^3.3.2",
     "iconv-lite": "^0.6.3",
