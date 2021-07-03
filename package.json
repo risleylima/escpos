@@ -1,0 +1,17 @@
+{
+  "name": "rlima-escpos",
+  "version": "0.0.1",
+  "description": "Library to deal with ESCPOS using some adapters",
+  "main": "index.js",
+  "author": "Rlima Info",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "get-pixels": "^3.3.2",
+    "iconv-lite": "^0.6.3",
+    "usb": "^1.7.1"
+  },
+  "devDependencies": {
+    "debug": "^4.3.1"
+  }
+}
