@@ -31,5 +31,8 @@
   "bugs": {
     "url": "https://github.com/risleylima/escpos/issues"
   },
-  "homepage": "https://github.com/risleylima/escpos#readme"
+  "homepage": "https://github.com/risleylima/escpos#readme",
+  "publishConfig": {
+    "access": "public"
+  }
 }
