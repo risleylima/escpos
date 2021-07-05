@@ -51,7 +51,7 @@ USB.connect = async (vid, pid) => {
   usb.on('detach', (device) => {
     if (device === scope.device) {
       debug('Device Unplugged!');
-      USB.disconnect();
+      USB.emit('detach');
       scope.device = null;
     }
   });
@@ -96,7 +96,7 @@ USB.open = async () => {
 
 USB.close = async () => {
   if (scope.device) {
-    scope.device.close();
+    await scope.device.close();
     USB.emit('close', scope.device);
     debug('Device Closed!');
 
@@ -108,9 +108,10 @@ USB.close = async () => {
 
 USB.disconnect = async () => {
   if (scope.device) {
-    USB.close();
+    await USB.close().catch(e => { debug(e); return true });
     USB.emit('disconnect', scope.device);
     debug('Device Disconnected!');
+    scope.endpoint = null;
     scope.device = null;
   }
 

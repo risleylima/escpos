@@ -606,6 +606,8 @@ class Printer {
     } else if (typeof data === 'string') {
       data = data.toLowerCase();
       this.buffer.write(Buffer.from(data.replace(/(\s|:)/g, ''), 'hex'));
+    }else {
+      throw new Error('Data is Invalid!')
     }
     return this;
   }
