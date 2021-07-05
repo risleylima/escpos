@@ -1,4 +1,5 @@
 'use strict'
+const { EventEmitter } = require('stream');
 const Adapter = require('../adapter');
 const usb = require('usb');
 const os = require('os');
@@ -10,7 +11,7 @@ const scope = {
   endpoint: null
 }
 
-const USB = {};
+const USB = new EventEmitter();
 
 USB.listUSB = async () => {
   const devices = usb.getDeviceList();
@@ -45,11 +46,12 @@ USB.connect = async (vid, pid) => {
   if (!scope.device) {
     throw new Error("Cannot find printer!");
   }
+  USB.emit('connect', scope.device);
 
   usb.on('detach', (device) => {
     if (device === scope.device) {
-      usb.emit('detach', device);
-      usb.emit('disconnect', device);
+      debug('Device Unplugged!');
+      USB.disconnect();
       scope.device = null;
     }
   });
@@ -80,10 +82,9 @@ USB.open = async () => {
         break;
       } else if (endpoint.direction == 'out') {
         scope.endpoint = endpoint;
-        usb.emit('connect', scope.device);
+        USB.emit('connect', scope.device);
         debug('Device Opened!');
       }
-
     }
   }
 
@@ -96,7 +97,7 @@ USB.open = async () => {
 USB.close = async () => {
   if (scope.device) {
     scope.device.close();
-    usb.emit('close', scope.device);
+    USB.emit('close', scope.device);
     debug('Device Closed!');
 
     scope.endpoint = null;
@@ -107,13 +108,8 @@ USB.close = async () => {
 
 USB.disconnect = async () => {
   if (scope.device) {
-    scope.device.close();
-
-    usb.emit('close', scope.device);
-    debug('Device Closed!');
-    scope.endpoint = null;
-
-    usb.emit('disconnect', scope.device);
+    USB.close();
+    USB.emit('disconnect', scope.device);
     debug('Device Disconnected!');
     scope.device = null;
   }
