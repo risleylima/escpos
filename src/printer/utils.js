@@ -30,7 +30,7 @@ exports.codeLength = function (str) {
 
 /**
 * Get Text Length
-* @return {String} String Length
+* @return {Number} String Length
 */
 exports.textLength = function (str) {
     return str.split('').reduce((accLen, char) => {

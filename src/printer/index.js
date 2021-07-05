@@ -66,7 +66,7 @@ class Printer {
    */
   setCharacterCodeTable(codeTable) {
     this.buffer.write(Buffer.concat([
-      command.ESC,
+      commands.ESC,
       commands.TAB,
       Buffer.from(commands.numToHexString(codeTable), 'hex')
     ]));
@@ -344,7 +344,7 @@ class Printer {
       this.buffer.write(
         Buffer.concat([
           commands.CHARACTER_SPACING.CS_SET,
-          Buffer.from(commands.numToHexString(size), 'hex')
+          Buffer.from(commands.numToHexString(n), 'hex')
         ])
       );
     }
@@ -415,7 +415,7 @@ class Printer {
     if (height >= 1 && height <= 255) {
       this.buffer.write(commands.BARCODE_FORMAT.BARCODE_HEIGHT(height));
     } else {
-      this.buffer.write(_.BARCODE_FORMAT.BARCODE_HEIGHT_DEFAULT);
+      this.buffer.write(commands.BARCODE_FORMAT.BARCODE_HEIGHT_DEFAULT);
     }
 
     this.buffer.write(commands.BARCODE_FORMAT['BARCODE_FONT_' + (font || 'A').toUpperCase()]);
@@ -434,7 +434,7 @@ class Printer {
     }
     this.buffer.write(Buffer.concat([
       Buffer.from(codeLength + code + (includeParity ? parityBit : ''), 'ascii'),
-      Buffer.from('00', hex)
+      Buffer.from('00', 'hex')
     ]));
 
     return this;
@@ -456,7 +456,7 @@ class Printer {
 
     bitmap.data.forEach((line) => {
       let lineLength = Buffer.allocUnsafe(2);
-      lineLength.writeUInt16LE(line.length / n);
+      lineLength.writeUInt16LE(line.length / n, 0);
 
       this.buffer.write(Buffer.concat([
         header,
@@ -484,21 +484,21 @@ class Printer {
     if (mode === 'dhdw' || mode === 'dwh' || mode === 'dhw')
       mode = 'dwdh';
 
-    let width = Buffer.allocUnsafe(2);
-    let height = Buffer.allocUnsafe(2);
 
     let raster = image.toRaster();
     let header = commands.GSV0_FORMAT['GSV0_' + mode.toUpperCase()];
 
+    let width = Buffer.allocUnsafe(2);
     width.writeUInt16LE(raster.width);
+    let height = Buffer.allocUnsafe(2);
     height.writeUInt16LE(raster.height);
 
-    this.buffer.write(Buffer.concat[
+    this.buffer.write(Buffer.concat([
       header,
       width,
       height,
       Buffer.from(raster.data)
-    ]);
+    ]));
 
     return this;
   }
@@ -522,8 +522,8 @@ class Printer {
     let nB = Buffer.allocUnsafe(1);
     let tB = Buffer.allocUnsafe(1);
 
-    nB.writeUInt8(n);
-    tB.writeUInt8(t);
+    nB.writeUInt8(n, 0);
+    tB.writeUInt8(t, 0);
 
     this.buffer.write(Buffer.concat([
       commands.BEEP,
@@ -550,7 +550,7 @@ class Printer {
    * Send data to hardware using the adapter and flush buffer
    * @return {Promise<Printer>} Promise containing the escpos printer instance
    */
-  flush = async () => {
+  async flush() {
     var buf = this.buffer.flush();
     if (buf.length > 0) {
       await this.adapter.write(buf);
@@ -562,7 +562,7 @@ class Printer {
    * Close the connection to the printer using the adapter
    * @return {Promise<Printer>} Promise containing the escpos printer instance
    */
-  close = async (options) => {
+  async close(options) {
     await this.flush();
     await this.adapter.close(options);
     return this;

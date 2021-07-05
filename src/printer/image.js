@@ -122,7 +122,7 @@ class Image {
    * @param  {Function} callback [description]
    * @return {Promise<Image>} Promise containing the Image Object itself;
    */
-  static load = (url, type) => {
+  static load(url, type) {
     return new Promise((resolve, reject) => {
       getPixels(url, type, (err, pixels) => {
         if (err)
