@@ -97,11 +97,11 @@ USB.open = async () => {
 USB.close = async () => {
   if (scope.device) {
     await scope.device.close();
-    USB.emit('close', scope.device);
-    debug('Device Closed!');
-
-    scope.endpoint = null;
   }
+
+  USB.emit('close', scope.device);
+  debug('Device Closed!');
+  scope.endpoint = null;
 
   return true;
 }
@@ -109,11 +109,11 @@ USB.close = async () => {
 USB.disconnect = async () => {
   if (scope.device) {
     await USB.close().catch(e => { debug(e); return true });
-    USB.emit('disconnect', scope.device);
-    debug('Device Disconnected!');
-    scope.endpoint = null;
-    scope.device = null;
   }
+  USB.emit('disconnect', scope.device);
+  debug('Device Disconnected!');
+  scope.endpoint = null;
+  scope.device = null;
 
   return true;
 }
