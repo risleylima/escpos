@@ -11,27 +11,58 @@ const scope = {
   endpoint: null
 }
 
+/**
+ * [USB Class Codes ]
+ * @type {Object}
+ * @docs http://www.usb.org/developers/defined_class
+ */
+const IFACE_CLASS = {
+  AUDIO: 0x01,
+  HID: 0x03,
+  PRINTER: 0x07,
+  HUB: 0x09
+};
+
 const USB = new EventEmitter();
 
 USB.listUSB = async () => {
-  const devices = usb.getDeviceList();
+  const devices = usb.getDeviceList().filter((device) => {
+    try {
+      return device.configDescriptor.interfaces.filter((iface) => {
+        return iface.filter((conf) => {
+          return conf.bInterfaceClass === IFACE_CLASS.PRINTER;
+        }).length;
+      }).length;
+    } catch (e) {
+      debug('Error while get device info: ', e);
+      return false;
+    }
+  });
+
   let retorno = [];
 
   const getDescriptor = (device, type) => new Promise((resolve, reject) => {
-    device.open();
-    device.getStringDescriptor(type, (err, data) => {
-      if (err) {
-        reject(new Error('Error while read selected Description'));
-      }
-      device.close();
-      resolve(data);
-    });
+    try {
+      device.open();
+      device.getStringDescriptor(type, (err, data) => {
+        if (err) {
+          reject(new Error('Error while read selected Description: ', e));
+        }
+        device.close();
+        resolve(data);
+      });
+    } catch (e) {
+      debug(new Error('Error while read device description: ', e));
+      resolve(false);
+    }
   });
 
   for (let device of devices) {
     device.manufacturer = await getDescriptor(device, device.deviceDescriptor.iManufacturer);
     device.product = await getDescriptor(device, device.deviceDescriptor.iProduct);
-    retorno.push(device);
+    if (device.manufacturer && device.product) {
+      retorno.push(device);
+    }
   }
 
   return retorno;
@@ -39,8 +70,14 @@ USB.listUSB = async () => {
 
 USB.connect = async (vid, pid) => {
   scope.device = null;
+  scope.endpoint = null;
   if (vid && pid) {
     scope.device = usb.findByIds(vid, pid);
+  }else{
+    let devices = await USB.listUSB();
+    console.log(devices);
+    if(devices && devices.length)
+      scope.device = devices[0];
   }
 
   if (!scope.device) {
