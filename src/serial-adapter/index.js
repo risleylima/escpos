@@ -1,54 +1,88 @@
 'use strict';
-const util = require('util');
+const SerialPort = require('serialport');
 const EventEmitter = require('events');
 const Adapter = require('../adapter');
-const SerialPort = require('serialport');
 
 const debug = require('debug')('escpos:serial-adapter');
 
 const scope = {
-  device: null
+  port: null,
+  verifyPort: async (port) => {
+    let ports = await SerialPort.list();
+    if (!ports.find((i) => i.path === port)) {
+      throw new Error('The specified port does not exist!')
+    }
+    return port;
+  }
 }
 
 const Serial = new EventEmitter();
 
-Serial.connect = async (port, options) => {
-  scope.device = null;
-  options = options || {
-    baudRate: 9600,
-    autoOpen: false
-  };
+Serial.connect = (port, options) => {
+  return new Promise((resolve) => {
+    let connectListener = async () => {
+      Serial.removeListener('close', connectListener);
+      scope.port = new SerialPort(await scope.verifyPort(port), Object.assign(options || {}, { autoOpen: true }), (err) => {
+        if (err) {
+          debug('Error Opening the Selected Port: ', err);
+          if (scope.port) {
+            scope.port.close(async () => {
+              await connectListener();
+            })
+          }
+        }
 
-  scope.device = new SerialPort(port, options);
+        let clearPort = () => {
+          Serial.emit('disconnect', scope.port);
+          scope.port.removeListener('close', clearPort);
+          scope.port = null;
+        }
 
-  Serial.on('close', () => {
-    Serial.emit('disconnect', scope.device);
-    scope.device = null;
+        scope.port.on('close', clearPort);
+
+        debug('Device Connected and Open!');
+        Serial.emit('connect', scope.port);
+
+        resolve(true);
+      });
+    }
+
+    Serial.on('close', connectListener);
+
+    if (scope.port) {
+      scope.port.close((e) => {
+        Serial.emit('close');
+      });
+    } else {
+      Serial.emit('close');
+    }
   });
-
-  Serial.emit('connect', scope.device);
-  debug('Device Connected!');
-  return true;
-};
-
+}
 
 Serial.open = () => {
   return new Promise((resolve, reject) => {
-    scope.device.open((err) => {
-      if (err)
-        reject(err)
-      resolve(true);
-    });
+    if (!scope.port.isOpen) {
+      scope.port.open((err) => {
+        if (err)
+          reject(err)
+        debug('Device Opened!');
+        resolve(scope.port.isOpen);
+      });
+    } else {
+      debug('Device is already Opened!');
+      resolve(true)
+    }
   });
 };
 
 Serial.write = (data) => {
   return new Promise((resolve, reject) => {
-    scope.device.write(data, (e) => {
-      // if (e) {
-      //   reject(e);
-      // }
-      resolve(true);
+    scope.port.write(data, (e) => {
+      if (e)
+        reject(e);
+      scope.port.drain(() => {
+        resolve(true);
+      })
     });
   });
 };
@@ -59,26 +93,24 @@ Serial.close = (timeout) => {
     time = 50
   }
 
-
   return new Promise((resolve, reject) => {
-    scope.device.drain(() => {
-      scope.device.flush((err) => {
-        setTimeout(() => {
-          if (err)
-            debug('Error while Flush Device: ', err);
-
-          scope.device.close((errClosing) => {
-            if (errClosing)
-              debug('Error while Close Device: ', errClosing);
-            scope.device = null;
+    scope.port.flush((e) => {
+      setTimeout(() => {
+        if (e)
+          debug('Error while Flush Device: ', e);
+        scope.port.drain(() => {
+          scope.port.close((eClosing) => {
+            if (eClosing)
+              debug('Error while Close Device: ', eClosing);
             Serial.emit('close');
             resolve(true);
-          })
-        });
+          });
+        })
       }, time);
     });
   });
-};
+
+}
 
 Serial.disconnect = (timeout) => {
   return Serial.close(timeout);
@@ -86,10 +118,12 @@ Serial.disconnect = (timeout) => {
 
 Serial.read = () => {
   return new Promise((resolve, reject) => {
-    this.device.on('data', (data) => {
+    let dataHandler = (data) => {
+      scope.port.removeListener('data', dataHandler);
       resolve(data);
-    });
-  })
+    }
+    scope.port.on('data', dataHandler);
+  });
 };
 
 module.exports = new Adapter(Serial);
