@@ -19,31 +19,35 @@ const scope = {
 const Serial = new EventEmitter();
 
 Serial.connect = (port, options) => {
-  return new Promise((resolve) => {
-    let connectListener = async () => {
+  return new Promise((resolve, reject) => {
+    let connectListener = () => {
       Serial.removeListener('close', connectListener);
-      scope.port = new SerialPort(await scope.verifyPort(port), Object.assign(options || {}, { autoOpen: true }), (err) => {
-        if (err) {
-          debug('Error Opening the Selected Port: ', err);
-          if (scope.port) {
-            scope.port.close(async () => {
-              await connectListener();
-            })
-          }
+      scope.verifyPort(port).catch(e => reject(e)).then((portVerified) => {
+        if (portVerified) {
+          scope.port = new SerialPort(portVerified, Object.assign(options || {}, { autoOpen: true }), (err) => {
+            if (err) {
+              debug('Error Opening the Selected Port: ', err);
+              if (scope.port) {
+                scope.port.close(async () => {
+                  await connectListener();
+                })
+              }
+            }
+
+            let clearPort = () => {
+              Serial.emit('disconnect', scope.port);
+              scope.port.removeListener('close', clearPort);
+              scope.port = null;
+            }
+
+            scope.port.on('close', clearPort);
+
+            debug('Device Connected and Open!');
+            Serial.emit('connect', scope.port);
+
+            resolve(true);
+          });
         }
-
-        let clearPort = () => {
-          Serial.emit('disconnect', scope.port);
-          scope.port.removeListener('close', clearPort);
-          scope.port = null;
-        }
-
-        scope.port.on('close', clearPort);
-
-        debug('Device Connected and Open!');
-        Serial.emit('connect', scope.port);
-
-        resolve(true);
       });
     }
 
