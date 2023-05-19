@@ -75,7 +75,6 @@ USB.connect = async (vid, pid) => {
     scope.device = usb.findByIds(vid, pid);
   }else{
     let devices = await USB.listUSB();
-    console.log(devices);
     if(devices && devices.length)
       scope.device = devices[0];
   }

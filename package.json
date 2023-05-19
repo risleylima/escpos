@@ -10,8 +10,8 @@
     "debug": "^4.3.1",
     "get-pixels": "^3.3.2",
     "iconv-lite": "^0.6.3",
-    "serialport": "^9.2.0",
-    "usb": "^1.7.1"
+    "serialport": "^11.0.0",
+    "usb": "^1.9.1"
   },
   "directories": {
     "example": "examples"
