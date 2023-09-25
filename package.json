@@ -6,18 +6,21 @@
   "author": "Rlima Info",
   "license": "MIT",
   "private": false,
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "debug": "^4.3.1",
     "get-pixels": "^3.3.2",
     "iconv-lite": "^0.6.3",
-    "serialport": "^11.0.0",
+    "serialport": "^12.0.0",
     "usb": "^1.9.1"
   },
   "directories": {
     "example": "examples"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" "
   },
   "repository": {
     "type": "git",

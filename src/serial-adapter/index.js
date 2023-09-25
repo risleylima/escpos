@@ -1,5 +1,5 @@
 'use strict';
-const SerialPort = require('serialport');
+const { SerialPort } = require('serialport');
 const EventEmitter = require('events');
 const Adapter = require('../adapter');
 
@@ -24,7 +24,7 @@ Serial.connect = (port, options) => {
       Serial.removeListener('close', connectListener);
       scope.verifyPort(port).catch(e => reject(e)).then((portVerified) => {
         if (portVerified) {
-          scope.port = new SerialPort(portVerified, Object.assign(options || {}, { autoOpen: true }), (err) => {
+          scope.port = new SerialPort(Object.assign(options || {}, { path: portVerified, autoOpen: true }), (err) => {
             if (err) {
               debug('Error Opening the Selected Port: ', err);
               if (scope.port) {
