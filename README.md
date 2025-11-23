@@ -215,6 +215,14 @@ await USB.disconnect();
 
 #### Methods
 
+##### `Serial.listSerial()`
+List all available serial ports.
+
+```javascript
+const ports = await Serial.listSerial();
+console.log(ports); // Array of serial port objects with path, manufacturer, vendorId, productId, etc.
+```
+
 ##### `Serial.connect(port, options)`
 Connect to a serial port printer.
 

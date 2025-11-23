@@ -49,6 +49,20 @@ describe('Serial Adapter', () => {
     jest.clearAllMocks();
   });
 
+  describe('listSerial', () => {
+    it('should list all available serial ports', async () => {
+      const ports = await Serial.listSerial();
+      expect(Array.isArray(ports)).toBe(true);
+      expect(SerialPort.list).toHaveBeenCalled();
+    });
+
+    it('should return port objects with path property', async () => {
+      const ports = await Serial.listSerial();
+      expect(ports.length).toBeGreaterThan(0);
+      expect(ports[0]).toHaveProperty('path');
+    });
+  });
+
   describe('connect', () => {
     it('should connect to serial port', async () => {
       const result = await Serial.connect('/dev/ttyUSB0');

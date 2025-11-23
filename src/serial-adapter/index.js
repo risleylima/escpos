@@ -27,6 +27,22 @@ const scope = {
 const Serial = new Adapter();
 
 /**
+ * List all available serial ports
+ * @async
+ * @returns {Promise<Array<Object>>} Array of serial port objects with properties like path, manufacturer, vendorId, productId, etc.
+ * @example
+ * const ports = await Serial.listSerial();
+ * console.log(ports);
+ * // [
+ * //   { path: '/dev/ttyUSB0', manufacturer: 'FTDI', vendorId: '0403', productId: '6001' },
+ * //   { path: '/dev/ttyUSB1', manufacturer: 'Prolific', vendorId: '067b', productId: '2303' }
+ * // ]
+ */
+Serial.listSerial = async () => {
+  return await SerialPort.list();
+};
+
+/**
  * Connect to a serial port printer
  * @async
  * @param {String} port - Serial port path (e.g., '/dev/ttyUSB0' or 'COM3')
