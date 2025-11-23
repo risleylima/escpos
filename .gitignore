@@ -33,7 +33,7 @@ Temporary Items
 .apdisk
 
 ### Node ###
-yarn.lock
+# yarn.lock - Keep yarn.lock for yarn projects
 # Logs
 logs
 *.log

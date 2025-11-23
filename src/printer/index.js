@@ -5,7 +5,6 @@ const iconv = require('iconv-lite');
 const utils = require('./utils');
 
 const Image = require('./image');
-const Adapter = require('../adapter');
 
 /**
  * This is the Special Buffer, a "Dinamyc" Buffer that will control the data that will be sent to the printer
@@ -49,7 +48,8 @@ class Printer {
    * @param {{encoding:string,width:string}} options Refers to the options that can be used to instantiate the class (Encoding, Size of Columns)
    */
   constructor(adapter, options) {
-    this.adapter = new Adapter(adapter);
+    // Use adapter directly to maintain consistency - adapter is already an Adapter instance (USB/Serial)
+    this.adapter = adapter;
     this.options = options;
     this.buffer = new SpecBuffer();
     this.Image = Image;
@@ -171,6 +171,11 @@ class Printer {
    * Set the Encode of the Text (See iconv NPM Library)
    * @param  {String} encoding Refers to the type of encoding that will be used
    * @return {Printer} The escpos printer instance 
+   */
+  /**
+   * Set the character encoding for text printing
+   * @param {String} encoding - Encoding name (e.g., 'GB18030', 'UTF-8', 'ASCII')
+   * @returns {Printer} The escpos printer instance
    */
   encode(encoding) {
     this.encoding = encoding;

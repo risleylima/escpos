@@ -1,10 +1,12 @@
 'use strict';
 /**
  * Utility function that converts numbers into hex values
- *
- * @usage:
- *   numToHex(256) => '0100'
- *   numToHex(0) => '00'
+ * @param {Number|String} value - Number to convert to hex
+ * @returns {String} Hexadecimal string representation (padded to even length)
+ * @example
+ *   numToHexString(256) => '0100'
+ *   numToHexString(0) => '00'
+ *   numToHexString(15) => '0f'
  */
 const numToHexString = (value) => {
   let num = Number(value);

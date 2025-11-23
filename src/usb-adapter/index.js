@@ -1,5 +1,4 @@
 'use strict'
-const { EventEmitter } = require('stream');
 const Adapter = require('../adapter');
 const usb = require('usb');
 const os = require('os');
@@ -23,16 +22,28 @@ const IFACE_CLASS = {
   HUB: 0x09
 };
 
-const USB = new EventEmitter();
+// Create Adapter instance first, so it's the same object used internally and exported
+const USB = new Adapter();
 
+/**
+ * List all available USB printer devices
+ * @async
+ * @returns {Promise<Array>} Array of USB printer devices with manufacturer and product information
+ */
 USB.listUSB = async () => {
   const devices = usb.getDeviceList().filter((device) => {
     try {
-      return device.configDescriptor.interfaces.filter((iface) => {
-        return iface.filter((conf) => {
-          return conf.bInterfaceClass === IFACE_CLASS.PRINTER;
-        }).length;
-      }).length;
+      // In v2, we need to check configDescriptor for interface class
+      const configDescriptor = device.configDescriptor;
+      if (!configDescriptor || !configDescriptor.interfaces) {
+        return false;
+      }
+      // configDescriptor.interfaces is an array of arrays (alternate settings)
+      return configDescriptor.interfaces.some((ifaceArray) => {
+        return ifaceArray.some((iface) => {
+          return iface.bInterfaceClass === IFACE_CLASS.PRINTER;
+        });
+      });
     } catch (e) {
       debug('Error while get device info: ', e);
       return false;
@@ -41,21 +52,30 @@ USB.listUSB = async () => {
 
   let retorno = [];
 
-  const getDescriptor = (device, type) => new Promise((resolve, reject) => {
+  /**
+   * Get string descriptor from USB device
+   * @private
+   * @async
+   * @param {Object} device - USB device object
+   * @param {Number} type - Descriptor type index
+   * @returns {Promise<String|Boolean>} Descriptor string or false on error
+   */
+  const getDescriptor = async (device, type) => {
     try {
-      device.open();
-      device.getStringDescriptor(type, (err, data) => {
-        if (err) {
-          reject(new Error('Error while read selected Description: ', e));
-        }
-        device.close();
-        resolve(data);
-      });
+      await device.open();
+      const data = await device.getStringDescriptor(type);
+      await device.close();
+      return data;
     } catch (e) {
-      debug(new Error('Error while read device description: ', e));
-      resolve(false);
+      debug('Error while read device description: ', e);
+      try {
+        await device.close();
+      } catch (closeErr) {
+        // Ignore close errors
+      }
+      return false;
     }
-  });
+  };
 
   for (let device of devices) {
     device.manufacturer = await getDescriptor(device, device.deviceDescriptor.iManufacturer);
@@ -68,6 +88,15 @@ USB.listUSB = async () => {
   return retorno;
 };
 
+/**
+ * Connect to a USB printer device
+ * @async
+ * @param {Number} [vid] - Vendor ID (optional, if not provided, uses first available printer)
+ * @param {Number} [pid] - Product ID (optional, if not provided, uses first available printer)
+ * @returns {Promise<Boolean>} True if connection successful
+ * @throws {Error} If printer cannot be found
+ * @fires USB#connect
+ */
 USB.connect = async (vid, pid) => {
   scope.device = null;
   scope.endpoint = null;
@@ -96,27 +125,52 @@ USB.connect = async (vid, pid) => {
   return true;
 };
 
+/**
+ * Open the USB device and claim the printer interface
+ * @async
+ * @returns {Promise<Boolean>} True if device opened successfully
+ * @throws {Error} If interfaces cannot be accessed or endpoint not found
+ * @fires USB#connect
+ */
 USB.open = async () => {
-  scope.device.open();
-  for (let iface of scope.device.interfaces) {
+  await scope.device.open();
+  
+  // In v2, device.interfaces is a direct array of Interface objects
+  // We need to iterate through all interfaces to find the printer interface
+  const interfaces = scope.device.interfaces;
+  if (!interfaces || interfaces.length === 0) {
+    throw new Error('Cannot access device interfaces');
+  }
+
+  for (let interfaceObj of interfaces) {
     if (scope.endpoint) {
       break;
     }
 
+    // Check if this interface is a printer interface
+    const descriptor = interfaceObj.descriptor;
+    if (descriptor && descriptor.bInterfaceClass !== IFACE_CLASS.PRINTER) {
+      continue;
+    }
+
+    // Claim interface (required on all platforms)
     if ("win32" !== os.platform()) {
-      if (iface.isKernelDriverActive()) {
+      // On Linux/macOS, detach kernel driver first if active
+      if (interfaceObj.isKernelDriverActive()) {
         try {
-          iface.detachKernelDriver();
+          await interfaceObj.detachKernelDriver();
         } catch (e) {
-          throw new Error("[ERROR] Could not detatch kernel driver: %s", e);
+          throw new Error(`[ERROR] Could not detach kernel driver: ${e.message}`);
         }
       }
-      iface.claim(); // must be called before using any endpoints of this interface.
     }
-    for (let endpoint of iface.endpoints) {
+    // Claim interface (required on all platforms before using endpoints)
+    await interfaceObj.claim();
+    
+    for (let endpoint of interfaceObj.endpoints) {
       if (scope.endpoint) {
         break;
-      } else if (endpoint.direction == 'out') {
+      } else if (endpoint.direction === 'out') {
         scope.endpoint = endpoint;
         USB.emit('connect', scope.device);
         debug('Device Opened!');
@@ -130,40 +184,100 @@ USB.open = async () => {
   return true;
 };
 
+/**
+ * Close the USB device connection and release interfaces
+ * @async
+ * @returns {Promise<Boolean>} True if device closed successfully
+ * @fires USB#close
+ */
 USB.close = async () => {
+  const device = scope.device; // Save device reference before cleanup
+  
   if (scope.device) {
-    await scope.device.close();
+    try {
+      // Release interfaces before closing
+      // Only release the interface we actually claimed
+      if (scope.endpoint && scope.endpoint.interface) {
+        const interfaceObj = scope.endpoint.interface;
+        try {
+          // Check if interface is still valid and was claimed
+          if (interfaceObj && typeof interfaceObj.release === 'function') {
+            await interfaceObj.release();
+          }
+        } catch (e) {
+          debug('Error releasing interface: ', e);
+        }
+      } else {
+        // Fallback: try to release all interfaces
+        const interfaces = scope.device.interfaces;
+        if (interfaces && interfaces.length > 0) {
+          for (let interfaceObj of interfaces) {
+            try {
+              // Only release if we claimed it (kernel driver was detached)
+              if (interfaceObj && typeof interfaceObj.release === 'function' && !interfaceObj.isKernelDriverActive()) {
+                await interfaceObj.release();
+              }
+            } catch (e) {
+              debug('Error releasing interface: ', e);
+            }
+          }
+        }
+      }
+      await scope.device.close();
+    } catch (e) {
+      debug('Error closing device: ', e);
+    }
   }
 
-  USB.emit('close', scope.device);
-  debug('Device Closed!');
+  // Clear endpoint before emitting event
   scope.endpoint = null;
+  
+  // Emit event synchronously - this ensures listeners are called immediately
+  USB.emit('close', device);
+  debug('Device Closed!');
 
   return true;
 }
 
+/**
+ * Disconnect from the USB device (calls close internally)
+ * @async
+ * @returns {Promise<Boolean>} True if disconnection successful
+ * @fires USB#disconnect
+ */
 USB.disconnect = async () => {
+  const device = scope.device; // Save device reference before cleanup
+  
   if (scope.device) {
     await USB.close().catch(e => { debug(e); return true });
   }
-  USB.emit('disconnect', scope.device);
-  debug('Device Disconnected!');
+  
+  // Clear scope before emitting event
   scope.endpoint = null;
   scope.device = null;
+  
+  // Emit event synchronously - this ensures listeners are called immediately
+  USB.emit('disconnect', device);
+  debug('Device Disconnected!');
 
   return true;
 }
 
-
-USB.write = (data) => {
-  return new Promise((resolve, reject) => {
-    scope.endpoint.transfer(data, (e) => {
-      if (e) {
-        reject(e);
-      }
-      resolve(true);
-    });
-  })
+/**
+ * Write data to the USB printer
+ * @async
+ * @param {Buffer} data - Data buffer to send to printer
+ * @returns {Promise<Boolean>} True if write successful
+ * @throws {Error} If write fails
+ */
+USB.write = async (data) => {
+  try {
+    await scope.endpoint.transfer(data);
+    return true;
+  } catch (e) {
+    throw e;
+  }
 }
 
-module.exports = new Adapter(USB);
+// USB is already an Adapter instance, so export it directly
+module.exports = USB;

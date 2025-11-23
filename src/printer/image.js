@@ -2,8 +2,12 @@
 const getPixels = require('get-pixels');
 
 /**
- * EscPos Image Object
- * @param {[type]} pixels Pixels formatted by the Get Pixels NPM Library
+ * EscPos Image Object for thermal printer image processing
+ * @class
+ * @classdesc Converts image pixels to printer-compatible formats (bitmap/raster)
+ * @param {Object} pixels - Pixels object formatted by the Get Pixels NPM Library
+ * @param {Array} pixels.shape - Image dimensions [width, height, colors]
+ * @param {Uint8Array} pixels.data - Pixel data array
  */
 class Image {
   constructor(pixels) {
@@ -38,6 +42,13 @@ class Image {
     });
   }
 
+  /**
+   * Convert image to bitmap format for thermal printer
+   * @param {Number} [density=24] - Bitmap density (dots per line)
+   * @returns {Object} Bitmap data object with data array and density
+   * @returns {Array} returns.data - Array of line data arrays
+   * @returns {Number} returns.density - Density used
+   */
   toBitmap(density) {
     density = density || 24;
 
@@ -77,6 +88,13 @@ class Image {
     };
   }
 
+  /**
+   * Convert image to raster format for thermal printer
+   * @returns {Object} Raster data object
+   * @returns {Array} returns.data - Raster data array
+   * @returns {Number} returns.width - Raster width in bytes
+   * @returns {Number} returns.height - Raster height in pixels
+   */
   toRaster() {
     let result = [];
     let width = this.size.width;
@@ -116,11 +134,14 @@ class Image {
 
 
   /**
-   * [load description]
-   * @param  {[type]}   url      [description]
-   * @param  {[type]}   type     [description]
-   * @param  {Function} callback [description]
-   * @return {Promise<Image>} Promise containing the Image Object itself;
+   * Load an image from URL or file path
+   * @static
+   * @param {String} url - Image URL or file path
+   * @param {String} [type] - Image MIME type (e.g., 'image/png', 'image/jpeg')
+   * @returns {Promise<Image>} Promise resolving to Image instance
+   * @throws {Error} If image cannot be loaded
+   * @example
+   *   const image = await Image.load('/path/to/image.png', 'image/png');
    */
   static load(url, type) {
     return new Promise((resolve, reject) => {
