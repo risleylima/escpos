@@ -1,6 +1,6 @@
 {
   "name": "@risleylima/escpos",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Library to deal with ESCPOS using some adapters",
   "main": "index.js",
   "author": "Rlima Info",
