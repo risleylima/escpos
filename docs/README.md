@@ -28,6 +28,9 @@ Complete review of JSDoc documentation coverage across the library.
 ### [Public API Analysis](./PUBLIC_API_ANALYSIS.md)
 Detailed analysis of the public API and exported modules, including breaking changes impact assessment.
 
+### [Versioning Rules](./VERSIONING.md) ⚠️
+Explicit semantic versioning rules for the project. **Read this before publishing any version update.**
+
 ## Main Documentation
 
 - **README.md** (root) - Main project documentation with installation, usage examples, and API reference
