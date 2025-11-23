@@ -189,7 +189,7 @@ node -e "console.log(require('./package.json').version)"
 
 # Check if version follows semantic versioning
 # MAJOR.MINOR.PATCH
-# 0.0.14 -> 0.0.15 (minor update)
+# 0.0.14 -> 0.1.0 (minor update)
 ```
 
 **What to check:**
@@ -302,7 +302,7 @@ npx np minor
 
 ## 🎯 Specific Recommendations for This Version
 
-For v0.0.15, check especially:
+For v0.1.0, check especially:
 
 1. **Major Dependency Updates:**
    - [x] `usb@^2.16.0` - Promise-based API working

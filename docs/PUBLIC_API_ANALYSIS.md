@@ -186,8 +186,7 @@ await printer.flush();
 ### Version Strategy
 
 Since there are **NO breaking changes** to the public API:
-- **Minor version bump**: `0.0.14` → `0.0.15` (recommended)
-- **OR patch version**: `0.0.14` → `0.0.15` (if you want to be conservative)
+- **Minor version bump**: `0.0.14` → `0.1.0` (published)
 
 **NOT a major version** because public API is unchanged.
 

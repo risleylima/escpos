@@ -3,7 +3,7 @@
 ## 📋 General Information
 
 - **Name**: `@risleylima/escpos`
-- **Version**: `0.0.14`
+- **Version**: `0.1.0`
 - **License**: MIT
 - **Node.js**: `>=18.0.0`
 - **Description**: Library to manage ESC/POS commands in Buffer (Node.js), then use an adapter to send the resulting data to the printer.
