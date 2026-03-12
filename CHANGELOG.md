@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-03-12
+
+### Added
+- **iconv-lite** dependency for encodings not natively supported by Node (e.g. `cp850`, `cp860`).
+- `encodeText()` in Printer: uses Node `Buffer` when encoding is supported, else `iconv.encode()` so text like "Paraná" prints correctly when the profile maps that encoding to the printer codepage.
+- Unit test for cp850 encoding (e.g. Paraná → 0xA0) in Codepage Automation suite.
+- COMMANDS_API.md: note that encodings such as cp850/cp860 are converted via iconv-lite.
+
+### Changed
+- `text()` and `textln()` now use the shared encoding path; setting `encoding: 'cp850'` (or `'cp860'`) with a profile that maps it to the correct `ESC t n` produces correct accented output on thermal printers (e.g. VKP80III).
+
+### Fixed
+- Encoding options like `cp850`/`cp860` previously had no effect (Node fallback to UTF-8); codepage command was sent but bytes were wrong, causing garbled text (e.g. "Parantí" instead of "Paraná"). Now bytes are correctly converted via iconv-lite.
+
 ## [1.0.4] - 2026-03-12
 
 ### Added

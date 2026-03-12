@@ -22,6 +22,7 @@ import * as utils from './utils';
 import { Image } from './image';
 import type { AdapterLike } from '../adapter';
 import qrcodeGenerator = require('qrcode-generator');
+import * as iconv from 'iconv-lite';
 
 export interface PrinterOptions {
   encoding?: string;
@@ -284,25 +285,33 @@ export class Printer {
   }
 
   /**
-   * Print text with encoding. If the profile has a mapping for the encoding, 
+   * Encode string to buffer using Node Buffer when supported, else iconv-lite (e.g. cp850, cp860).
+   */
+  private encodeText(content: string, encoding: string): Buffer {
+    if (Buffer.isEncoding(encoding)) {
+      return Buffer.from(content, encoding as BufferEncoding);
+    }
+    if (iconv.encodingExists(encoding)) {
+      return iconv.encode(content, encoding);
+    }
+    return Buffer.from(content, 'utf8');
+  }
+
+  /**
+   * Print text with encoding. If the profile has a mapping for the encoding,
    * it automatically sends the codepage command (ESC t n).
+   * Uses iconv-lite for encodings not natively supported by Node (e.g. cp850, cp860).
    */
   text(content: string, encoding?: string): this {
     const enc = encoding ?? this.encoding;
     this.autoSetCodepage(enc);
-    const buf = Buffer.isEncoding(enc)
-      ? Buffer.from(content, enc as BufferEncoding)
-      : Buffer.from(content, 'utf8');
-    return this.print(buf);
+    return this.print(this.encodeText(content, enc));
   }
 
   textln(content: string, encoding?: string): this {
     const enc = encoding ?? this.encoding;
     this.autoSetCodepage(enc);
-    const buf = Buffer.isEncoding(enc)
-      ? Buffer.from(content, enc as BufferEncoding)
-      : Buffer.from(content, 'utf8');
-    return this.println(buf);
+    return this.println(this.encodeText(content, enc));
   }
 
   drawLine(character: string = '-'): this {

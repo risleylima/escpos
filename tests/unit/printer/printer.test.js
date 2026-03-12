@@ -295,6 +295,21 @@ describe('Printer', () => {
       const hex = buffer.toString('hex').toLowerCase();
       expect(hex).not.toContain('1b7403');
     });
+
+    it('should encode text with cp850 via iconv-lite (e.g. Paraná -> 0xA0 for á)', () => {
+      const profile = {
+        id: 'test',
+        codepages: { 'cp850': 2 }
+      };
+      const customPrinter = new Printer(mockAdapter, { profile, encoding: 'cp850' });
+      customPrinter.text('Paraná');
+      const buffer = customPrinter.buffer.flush();
+      const hex = buffer.toString('hex').toLowerCase();
+      expect(hex).toContain('1b7402'); // ESC t 2
+      // In CP850, 'á' (U+00E1) is 0xA0
+      expect(hex).toContain('a0');
+      expect(hex).not.toContain('c3a1'); // no UTF-8 sequence for á
+    });
   });
 
   describe('Barcode', () => {

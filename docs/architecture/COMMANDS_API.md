@@ -62,6 +62,8 @@ Behavior notes:
 | `text(content: string, encoding?: string)` | Encoded text with profile codepage auto-switch support |
 | `textln(content: string, encoding?: string)` | `text` plus newline |
 
+Encoding: Node built-in encodings (`utf8`, `ascii`, `latin1`, etc.) are used when supported; others (e.g. `cp850`, `cp860`) are converted via **iconv-lite** so that text like "Paraná" prints correctly when the profile maps that encoding to the printer codepage.
+
 ### Alignment helpers
 
 | Method | Accepted values |
