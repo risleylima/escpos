@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-03-12
+
+### Added
+- Serial adapter: default `baudRate` 9600 when omitted (node-serialport requires it; no breaking change).
+- README: Serial examples for Windows (COM port) and cross-platform port path notes.
+
+### Changed
+- README: Serial section documents optional baudRate and Windows-only example block.
+- JSDoc on `Serial.connect()`: baudRate is optional; open() uses 9600 by default.
+
 ## [1.0.0] - 2026-03-11
 
 ### Added
@@ -108,6 +118,7 @@ Initial stable release with USB and Serial adapter support.
 
 ## Version History
 
+- **1.0.1** - Serial default baudRate 9600; README Windows Serial examples and docs
 - **1.0.0** - TypeScript-first stable release with hardened adapters, profile system, QR protocol fixes, and advanced image pipeline (GIF/SVG/Adam7)
 - **0.2.1** - Added versioning documentation
 - **0.2.0** - Added `Serial.listSerial()` method for listing available serial ports

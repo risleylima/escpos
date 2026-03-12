@@ -5,6 +5,7 @@ const debug = require('debug')('escpos:serial-adapter') as (msg: string, ...args
 
 const NOT_CONNECTED_MSG = 'Not connected. Call connect(port[, options]) first.';
 const CHUNK_SIZE = 4096; // 4KB chunks for RS232 stability
+const DEFAULT_BAUD_RATE = 9600;
 
 export class Serial extends Adapter {
   private port: SerialPort | null = null;
@@ -15,6 +16,10 @@ export class Serial extends Adapter {
     return SerialPort.list();
   }
 
+  /**
+   * Configure the serial port. Options are passed to the underlying SerialPort (e.g. baudRate).
+   * If baudRate is omitted, open() will use 9600 by default (node-serialport requires baudRate).
+   */
   async connect(port: string, options?: Record<string, unknown>): Promise<boolean> {
     return this.synchronized(async () => {
       this.path = port;
@@ -39,8 +44,11 @@ export class Serial extends Adapter {
             return reject(new Error('The specified port does not exist!'));
           }
 
+          const opts = this.options ?? {};
+          const baudRate = (opts.baudRate as number | undefined) ?? DEFAULT_BAUD_RATE;
           this.port = new SerialPort({
-            ...(this.options ?? {}),
+            ...opts,
+            baudRate,
             path: this.path!,
             autoOpen: false,
           } as ConstructorParameters<typeof SerialPort>[0]);

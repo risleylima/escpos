@@ -1,6 +1,6 @@
 {
   "name": "@risleylima/escpos",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Node.js thermal printer library: ESC/POS, receipts, barcodes, images via USB or Serial",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

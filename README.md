@@ -70,6 +70,38 @@ await printer.flush();
 await adapter.close();
 ```
 
+### Serial Example
+```javascript
+import { Serial, Printer } from '@risleylima/escpos';
+
+const adapter = new Serial();
+// baudRate is optional; if omitted, 9600 is used when opening (node-serialport requires it).
+// Port path: Linux/macOS → /dev/ttyUSB0, /dev/tty.usbmodem*; Windows → COM1, COM2, COM3, ...
+await adapter.connect(process.platform === 'win32' ? 'COM3' : '/dev/tty.usbmodem112301', { baudRate: 115200 });
+await adapter.open();
+
+const printer = new Printer(adapter);
+printer.textln('Serial Printing').cut();
+
+await printer.flush();
+await adapter.close();
+```
+**Windows:** Use the COM port shown in Device Manager (Ports COM & LPT), e.g. `COM3` or `COM4`. On Windows the path is always `COMn`.
+
+Windows-only Serial example:
+```javascript
+import { Serial, Printer } from '@risleylima/escpos';
+
+const adapter = new Serial();
+await adapter.connect('COM3', { baudRate: 9600 }); // or 115200, depending on the printer
+await adapter.open();
+
+const printer = new Printer(adapter);
+printer.textln('Windows print').cut();
+await printer.flush();
+await adapter.close();
+```
+
 ### USB Example
 ```javascript
 import { USB, Printer } from '@risleylima/escpos';
@@ -145,6 +177,7 @@ You can also register model profiles at runtime with `registerProfile(...)`, or 
 
 ## ⚙️ Reliability and Safety Notes
 
+- **Serial:** If you omit `baudRate` in `connect(port, options)`, the adapter uses 9600 when opening. Pass `baudRate` to match the printer (e.g. 115200 for Bematech MP-4200 TH).
 - `flush()` is transactional: if adapter write fails, payload is preserved in buffer for retry/recovery.
 - Printer I/O is serialized internally for `flush()`, `close()`, and `getStatus()` to reduce race conditions in concurrent flows.
 - Passing an unknown profile id now fails fast with a descriptive error instead of silently falling back.
