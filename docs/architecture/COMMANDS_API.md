@@ -98,7 +98,7 @@ Important:
 | `tableCustom(columns, encoding?)` | Alias to `row`; supports decimal widths (`0.5` = 50%) |
 | `lineItem(desc, price, optionsOrEncoding?, encoding?)` | Typical 2-column item line |
 | `lineItemWithQty(desc, qty, price, optionsOrEncoding?, encoding?)` | Typical 3-column line |
-| `total(label, value, optionsOrEncoding?, encoding?)` | Total row (bold by default) |
+| `total(label, value, optionsOrEncoding?, encoding?)` | Total row (bold by default). Options: `{ bold?: boolean }`. |
 
 `row` column shape:
 
@@ -251,7 +251,7 @@ Use `raw(...)` only when you need command-level control not exposed by the high-
 | Method | Return | Notes |
 |---|---|---|
 | `flush()` | `Promise<this>` | Sends current buffer. On write failure, payload is prepended back (transactional behavior). |
-| `close(options?)` | `Promise<this>` | Flushes pending buffer then closes adapter. |
+| `close(options?)` | `Promise<this>` | Flushes pending buffer then closes adapter. `options`: `{ timeout?: number }`. |
 | `getStatus(type?)` | `Promise<Buffer>` | Reads real-time status (`PRINTER`, `OFFLINE`, `ERROR`, `PAPER`). |
 | `recover(options?)` | `Promise<RecoverResult>` | Adapter recover + profile/global printer baseline reset. |
 
