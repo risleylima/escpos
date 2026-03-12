@@ -1,12 +1,21 @@
 'use strict';
 
-const Adapter = require('../../../src/adapter');
+const { Adapter } = require('../../../dist');
 
 describe('Adapter', () => {
+  class MockAdapter extends Adapter {
+    async connect() { return true; }
+    async open() { return true; }
+    async write() { return true; }
+    async read() { return Buffer.alloc(0); }
+    async close() { return true; }
+    async disconnect() { return true; }
+  }
+
   let adapter;
 
   beforeEach(() => {
-    adapter = new Adapter();
+    adapter = new MockAdapter();
   });
 
   it('should be an instance of EventEmitter', () => {
@@ -14,36 +23,10 @@ describe('Adapter', () => {
     expect(adapter).toBeInstanceOf(EventEmitter);
   });
 
-  it('should throw NotImplementedException for connect', () => {
-    expect(() => adapter.connect()).toThrow(Error);
-  });
-
-  it('should throw NotImplementedException for open', () => {
-    expect(() => adapter.open()).toThrow(Error);
-  });
-
-  it('should throw NotImplementedException for write', () => {
-    expect(() => adapter.write()).toThrow(Error);
-  });
-
-  it('should throw NotImplementedException for close', () => {
-    expect(() => adapter.close()).toThrow(Error);
-  });
-
-  it('should throw NotImplementedException for read', () => {
-    expect(() => adapter.read()).toThrow(Error);
-  });
-
-  it('should copy properties from provided adapter', () => {
-    const mockAdapter = {
-      connect: jest.fn(),
-      write: jest.fn(),
-      customProp: 'test'
-    };
-
-    const adapter = new Adapter(mockAdapter);
-    expect(adapter.customProp).toBe('test');
-    expect(adapter.connect).toBe(mockAdapter.connect);
+  it('should implement basic methods', async () => {
+    expect(await adapter.connect()).toBe(true);
+    expect(await adapter.open()).toBe(true);
+    expect(await adapter.write()).toBe(true);
+    expect(await adapter.close()).toBe(true);
   });
 });
-

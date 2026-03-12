@@ -1,6 +1,6 @@
 'use strict';
 
-const commands = require('../../../src/printer/commands');
+const { commands } = require('../../../dist/printer/commands');
 
 describe('Commands', () => {
   describe('numToHexString', () => {

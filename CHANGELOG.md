@@ -5,10 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Full TypeScript migration across public entrypoint, adapters, printer core, commands, image pipeline, and profiles.
+- Network adapter implementation with open/write/read/close lifecycle and dedicated unit tests.
+- Profile system expansion:
+  - `custom-vkp80iii` and `bematech-mp4200th` model profiles
+  - runtime registration and listing
+  - isolated registry support via `createProfileRegistry(...)`
+- Image loader improvements:
+  - GIF support (first frame via `omggif`)
+  - Data URI and Buffer input for `Image.load` / `loadImagePixels`
+- New tests for:
+  - QR/Barcode command behavior
+  - adapter lifecycle robustness
+  - profile registration/contract
+  - image loader parity scenarios.
+
+### Changed
+- QR Code flow aligned to ESC/POS `GS ( k` with official functions 165/167/169/180/181.
+- Default profile paper width set to 80 columns; model-specific widths remain profile-driven.
+- Printer reliability behavior:
+  - transactional `flush()` preserving payload on adapter write failure
+  - serialized I/O path for `flush()`, `close()`, and `getStatus()`
+  - fail-fast when an unknown profile id is provided
+- Adapter resilience hardening:
+  - timeout and close-safety improvements for Network/Serial/USB
+  - safer reconnect semantics and partial-failure handling.
+- Documentation restructured to `docs/architecture/*` with profile-specific guides and protocol references.
+
+### Fixed
+- QR opcode/function mismatch that could fail on strict ESC/POS devices.
+- Buffer-loss scenario during failed flush/write operations.
+- Multiple lifecycle edge cases in adapters under long-running and reconnect-heavy workloads.
+
+### Removed
+- Legacy JavaScript source tree (`src/**/*.js`) in favor of TypeScript sources.
+- Root legacy `index.js` entrypoint in favor of `src/index.ts` -> `dist/index.js`.
+- Legacy/duplicated docs replaced by architecture/specs structure.
+
 ## [0.2.1] - 2025-11-23
 
 ### Added
-- Versioning documentation (`docs/VERSIONING.md`) with explicit semantic versioning rules
+- Versioning documentation (`docs/architecture/VERSIONING.md`) with explicit semantic versioning rules
 
 ## [0.2.0] - 2025-11-23
 

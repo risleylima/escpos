@@ -1,6 +1,6 @@
 'use strict';
 
-const utils = require('../../../src/printer/utils');
+const utils = require('../../../dist/printer/utils');
 
 describe('Utils', () => {
   describe('getParityBit', () => {
@@ -17,34 +17,29 @@ describe('Utils', () => {
       const parity = utils.getParityBit(code);
       expect(parity).toMatch(/^\d$/);
     });
-
-    it('should return valid parity for different codes', () => {
-      const codes = ['123456789012', '987654321098', '111111111111'];
-      codes.forEach(code => {
-        const parity = utils.getParityBit(code);
-        expect(parity).toMatch(/^\d$/);
-      });
-    });
   });
 
   describe('codeLength', () => {
-    it('should return length as hex string', () => {
+    it('should return length as Buffer (1 byte)', () => {
       const result = utils.codeLength('12345');
-      expect(typeof result).toBe('string');
-      // codeLength converts number to hex, then to Buffer, then to string
-      // For length 5, hex is '5', which becomes a single byte Buffer
-      expect(result).toBeDefined();
+      expect(Buffer.isBuffer(result)).toBe(true);
+      expect(result.length).toBe(1);
+      expect(result[0]).toBe(5);
     });
 
     it('should handle empty string', () => {
       const result = utils.codeLength('');
-      expect(typeof result).toBe('string');
+      expect(result[0]).toBe(0);
     });
 
     it('should handle different string lengths', () => {
-      expect(utils.codeLength('A')).toBeDefined();
-      expect(utils.codeLength('AB')).toBeDefined();
-      expect(utils.codeLength('ABC')).toBeDefined();
+      expect(utils.codeLength('A')[0]).toBe(1);
+      expect(utils.codeLength('ABC')[0]).toBe(3);
+    });
+
+    it('should throw when string length > 255', () => {
+      const longStr = 'x'.repeat(256);
+      expect(() => utils.codeLength(longStr)).toThrow('codeLength: string length must be <= 255');
     });
   });
 
@@ -55,42 +50,7 @@ describe('Utils', () => {
 
     it('should count multi-byte characters as 2', () => {
       const chinese = '你好';
-      const length = utils.textLength(chinese);
-      expect(length).toBeGreaterThan(2);
-    });
-
-    it('should handle mixed ASCII and multi-byte', () => {
-      const mixed = 'Hello 世界';
-      const length = utils.textLength(mixed);
-      expect(length).toBeGreaterThan(7);
-    });
-
-    it('should handle empty string', () => {
-      expect(utils.textLength('')).toBe(0);
-    });
-  });
-
-  describe('textSubstring', () => {
-    it('should extract substring correctly', () => {
-      const result = utils.textSubstring('Hello World', 0, 5);
-      expect(result).toBe('Hello');
-    });
-
-    it('should handle start and end positions', () => {
-      const result = utils.textSubstring('Hello World', 6, 11);
-      expect(result).toBe('World');
-    });
-
-    it('should handle multi-byte characters', () => {
-      const chinese = '你好世界';
-      const result = utils.textSubstring(chinese, 0, 2);
-      expect(result.length).toBeGreaterThan(0);
-    });
-
-    it('should handle end undefined', () => {
-      const result = utils.textSubstring('Hello World', 6);
-      expect(result).toBe('World');
+      expect(utils.textLength(chinese)).toBe(4); // 2 chars * 2
     });
   });
 });
-

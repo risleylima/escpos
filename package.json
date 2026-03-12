@@ -1,39 +1,53 @@
 {
   "name": "@risleylima/escpos",
   "version": "0.2.1",
-  "description": "Library to deal with ESCPOS using some adapters",
-  "main": "index.js",
+  "description": "Node.js thermal printer library: ESC/POS, receipts, barcodes, images via USB or Serial",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "author": "Rlima Info",
   "license": "MIT",
   "private": false,
   "engines": {
     "node": ">=18.0.0"
   },
+  "scripts": {
+    "build": "tsc",
+    "test": "yarn build && jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "check:ts": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
   "dependencies": {
     "debug": "^4.4.3",
-    "get-pixels": "https://github.com/risleylima/get-pixels",
-    "iconv-lite": "^0.7.0",
+    "jpeg-js": "^0.4.4",
+    "omggif": "^1.0.10",
     "serialport": "^13.0.0",
-    "usb": "^2.16.0"
+    "usb": "^2.17.0"
   },
   "devDependencies": {
-    "jest": "^30.2.0"
+    "@types/node": "^22.0.0",
+    "jest": "^30.2.0",
+    "typescript": "^5.8.0"
   },
   "directories": {
     "example": "examples"
-  },
-  "scripts": {
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/risleylima/escpos.git"
   },
   "keywords": [
-    "EscPos",
-    "USB"
+    "escpos",
+    "thermal-printer",
+    "receipt-printer",
+    "pos",
+    "usb",
+    "serial",
+    "nodejs",
+    "barcode",
+    "receipt",
+    "typescript"
   ],
   "bugs": {
     "url": "https://github.com/risleylima/escpos/issues"
@@ -41,5 +55,17 @@
   "homepage": "https://github.com/risleylima/escpos#readme",
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

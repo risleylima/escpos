@@ -180,3 +180,4 @@ out-tsc/
 
 misc*
 .npmignore
+package-lock.json

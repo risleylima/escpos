@@ -1,6 +1,6 @@
 'use strict';
 
-const Printer = require('../../../src/printer');
+const { Printer } = require('../../../dist');
 
 describe('SpecBuffer', () => {
   let printer;

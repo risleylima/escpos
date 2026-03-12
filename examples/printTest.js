@@ -1,18 +1,13 @@
 'use strict';
-// DEBUGGER
 const debug = require('debug')('escpos:test-printer');
 
-//IMPORT USB ADAPTER
-const USB = require('../src/usb-adapter');
+const { USB, Printer } = require('@risleylima/escpos');
 
-//IMPORT PRINTER MANAGER
-const Printer = require('../src/printer');
-
-let print = async (printer, n) => {
+const print = async (printer, n) => {
   printer.hardware('init');
   printer
     .beep(2, 1)
-    .encode(860)
+    .encode('UTF-8')
     .size(2, 2)
     .align('ct')
     .textln('PRINT CUPOM TEST')
@@ -41,9 +36,14 @@ let print = async (printer, n) => {
 };
 
 (async () => {
-  let vid = 1046, pid = 20497;
+  const vid = 1046;
+  const pid = 20497;
   await USB.connect(vid, pid);
-  const printerDevice = new Printer(USB);
+  const printerDevice = new Printer(USB, {
+    encoding: 'utf8',
+    width: 48,
+    profile: 'default',
+  });
 
   for (let i = 0; i < 3; i++) {
     await USB.open();
