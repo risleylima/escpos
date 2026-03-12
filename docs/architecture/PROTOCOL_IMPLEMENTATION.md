@@ -5,7 +5,6 @@ This document details the support for low-level commands and the references used
 ## 1. Primary Technical References
 
 Official reference manuals are available in the `docs/specs/` directory:
-- **Core Reference:** `escp2ref.pdf` (Epson ESC/P Reference).
 - **Command Manual:** `Commande ESCPOS.pdf` (Generic specification).
 - **Manufacturer Manuals (Custom):** `Manual-de-Progamacion.pdf` and `CUSTOM-MANUAL.PDF`.
 
@@ -20,6 +19,7 @@ Official reference manuals are available in the `docs/specs/` directory:
 ### Graphics (Images)
 - **ESC * m nL nH d1...dk:** Bit Image (Supports d8, s8, d24, s24 densities).
 - **GS v 0 m xL xH yL yH d1...dk:** Raster Bit Image (Optimized method for modern images).
+- Image loader supports: PNG (including Adam7 interlaced), BMP, JPEG, GIF, and SVG (via rasterization).
 
 ### Barcodes
 - Native support for **UPC-A, UPC-E, EAN13, EAN8, CODE39, ITF, NW7, CODE93, CODE128**.
@@ -30,6 +30,9 @@ Official reference manuals are available in the `docs/specs/` directory:
 
 ### Real-time Status
 - **DLE EOT n:** Real-time printer status transmission. Essential for detecting "Out of Paper" or "Cover Open" conditions before/during print jobs.
+
+### Recovery baseline
+- **ESC @ + baseline formatting commands:** Used in profile-aware `recover()` flows to restore printer runtime state after transport/protocol errors.
 
 ### Other Features
 - **ESC p m t1 t2:** Cash drawer kick-out.

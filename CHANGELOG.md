@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.0.2] - 2026-03-11
+
+### Added
+- Recovery contract at adapter layer (`recover()`) with transport-specific implementations for Network, Serial, and USB.
+- Printer-level recovery API (`Printer.recover(...)`) with optional status probing via real-time `DLE EOT` checks.
+- Profile-level recovery hook (`buildRecoverCommand(context)`) to allow model-specific baseline reset flows.
+- Recovery command baselines for:
+  - `default` profile (generic ESC/POS)
+  - `bematech-mp4200th`
+  - `custom-vkp80iii` (non-destructive recover; no presenter/cut command side effects)
+- QR code raster alignment: `position` (left/center/right) and `offsetCols` for calibration on generic firmwares.
+
+### Changed
+- Architecture docs (`PROFILE_CONTRACT.md`) now include `buildCode2d(...)` and `buildRecoverCommand(...)` as first-class profile extension points.
+- README: QR section documents `offsetCols` for fine-tuning raster QR placement; Reliability section documents transactional `flush()` and `printer.recover()` after errors.
+- `PROTOCOL_IMPLEMENTATION.md`: removed invalid reference to `escp2ref.pdf`; specs list aligned to available docs.
+
 ## [1.0.1] - 2026-03-12
 
 ### Added
