@@ -107,7 +107,7 @@ TOTAL                                   $ 30.00
 
 ## 🖼️ Industrial Image Processing
 
-- **Formats:** PNG (Indexed/Gray/RGB), BMP (1/4/8/24-bit), JPEG, and GIF.
+- **Formats:** PNG (Indexed/Gray/RGB), BMP (1/4/8/24-bit), JPEG, GIF, and SVG.
 - **Non-blocking:** Asynchronous decoding with `setImmediate` ensuring your server stays responsive.
 
 ```javascript

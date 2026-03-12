@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-03-11
 
 ### Added
 - Full TypeScript migration across public entrypoint, adapters, printer core, commands, image pipeline, and profiles.
@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - isolated registry support via `createProfileRegistry(...)`
 - Image loader improvements:
   - GIF support (first frame via `omggif`)
+  - SVG support via internal rasterization before print pipeline
   - Data URI and Buffer input for `Image.load` / `loadImagePixels`
 - New tests for:
   - QR/Barcode command behavior
@@ -107,6 +108,7 @@ Initial stable release with USB and Serial adapter support.
 
 ## Version History
 
+- **1.0.0** - TypeScript-first stable release with hardened adapters, profile system, QR protocol fixes, and advanced image pipeline (GIF/SVG/Adam7)
 - **0.2.1** - Added versioning documentation
 - **0.2.0** - Added `Serial.listSerial()` method for listing available serial ports
 - **0.1.0** - Major dependency updates, 100% test coverage, complete documentation

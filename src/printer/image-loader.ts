@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as zlib from 'zlib';
 import { decode as decodeJpeg } from 'jpeg-js';
 import { GifReader } from 'omggif';
+import { Resvg } from '@resvg/resvg-js';
 import { promisify } from 'util';
 
 const inflate = promisify(zlib.inflate);
@@ -17,12 +18,24 @@ export interface PixelsResult {
 
 /** Parsed data URI: data:[mime];base64,<payload> */
 function parseDataUri(uri: string): { buffer: Buffer; mime: string } {
-  const match = /^data:([^;,]+)(?:;base64)?,(.*)$/.exec(uri);
-  if (!match) throw new Error('Invalid data URI format');
-  const mime = match[1].trim().toLowerCase();
-  const base64 = match[2];
-  if (!base64) throw new Error('Data URI has no payload');
-  return { buffer: Buffer.from(base64, 'base64'), mime };
+  const comma = uri.indexOf(',');
+  if (!uri.startsWith('data:') || comma < 0) {
+    throw new Error('Invalid data URI format');
+  }
+
+  const header = uri.slice(5, comma);
+  const payload = uri.slice(comma + 1);
+  if (!payload) throw new Error('Data URI has no payload');
+
+  const parts = header.split(';').filter(Boolean);
+  const mime = (parts[0] || 'application/octet-stream').trim().toLowerCase();
+  const isBase64 = parts.some((part) => part.trim().toLowerCase() === 'base64');
+
+  if (isBase64) {
+    return { buffer: Buffer.from(payload, 'base64'), mime };
+  }
+
+  return { buffer: Buffer.from(decodeURIComponent(payload), 'utf8'), mime };
 }
 
 function isPath(str: string): boolean {
@@ -127,6 +140,7 @@ async function parsePng(buffer: Buffer): Promise<PixelsResult> {
   let height = 0;
   let depth = 0;
   let colorType = 0;
+  let interlaceMethod = 0;
   let palette: Buffer | null = null;
   let idatChunks: Buffer[] = [];
 
@@ -137,14 +151,18 @@ async function parsePng(buffer: Buffer): Promise<PixelsResult> {
     pos += 12 + len;
 
     if (type === 'IHDR') {
-      if (len < 8) throw new Error('PNG IHDR too short');
+      if (len < 13) throw new Error('PNG IHDR too short');
       width = payload.readUInt32BE(0);
       height = payload.readUInt32BE(4);
       depth = payload[8];
       colorType = payload[9];
+      interlaceMethod = payload[12];
       // Allowed: 0 (Gray), 2 (RGB), 3 (Indexed), 6 (RGBA)
       if (depth !== 8) {
         throw new Error('PNG: only 8-bit depth supported');
+      }
+      if (interlaceMethod !== 0 && interlaceMethod !== 1) {
+        throw new Error(`PNG: unsupported interlace method ${interlaceMethod}`);
       }
     } else if (type === 'PLTE') {
       palette = payload;
@@ -155,64 +173,186 @@ async function parsePng(buffer: Buffer): Promise<PixelsResult> {
     }
   }
 
+  if (colorType !== 0 && colorType !== 2 && colorType !== 3 && colorType !== 6) {
+    throw new Error(`PNG: unsupported color type ${colorType}`);
+  }
+
   const raw = await inflate(Buffer.concat(idatChunks));
-  
+
   // Channels in the output buffer (we always normalize to RGB or RGBA)
   let channels = 3;
   if (colorType === 6) channels = 4; // RGBA
   if (colorType === 0 || colorType === 3) channels = 3; // Normalize Gray/Indexed to RGB
 
   const bpp = colorType === 0 ? 1 : colorType === 2 ? 3 : colorType === 3 ? 1 : 4;
-  const rowBytes = 1 + width * bpp;
-  const data = new Uint8Array(width * height * channels);
-  let prevRow = new Uint8Array(width * bpp);
+  const paeth = (left: number, up: number, upLeft: number): number => {
+    const p = left + up - upLeft;
+    const pa = Math.abs(p - left);
+    const pb = Math.abs(p - up);
+    const pc = Math.abs(p - upLeft);
+    return pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+  };
 
-  for (let y = 0; y < height; y++) {
-    if (y % 100 === 0) await new Promise((resolve) => setImmediate(resolve));
-    const rowStart = y * rowBytes;
-    const filter = raw[rowStart];
-    
-    for (let x = 0; x < width; x++) {
-      const inIdx = rowStart + 1 + x * bpp;
-      const outIdx = (y * width + x) * channels;
-      
-      for (let c = 0; c < bpp; c++) {
-        let v = raw[inIdx + c];
-        const left = x > 0 ? raw[inIdx - bpp + c] : 0; // Simplified filter access
-        const up = prevRow[x * bpp + c] ?? 0;
-        const upLeft = x > 0 ? (prevRow[(x - 1) * bpp + c] ?? 0) : 0;
-        
+  const unfilter = (
+    src: Uint8Array,
+    rowWidth: number,
+    rowHeight: number
+  ): { rows: Uint8Array; consumed: number } => {
+    const stride = rowWidth * bpp;
+    const rowBytes = 1 + stride;
+    const needed = rowBytes * rowHeight;
+    if (src.length < needed) {
+      throw new Error('PNG: corrupted IDAT data');
+    }
+    const out = new Uint8Array(stride * rowHeight);
+    let offset = 0;
+    let prevRecon = new Uint8Array(stride);
+
+    for (let y = 0; y < rowHeight; y++) {
+      const rowStart = offset;
+      const filter = src[rowStart];
+      if (filter > 4) {
+        throw new Error(`PNG: unsupported filter type ${filter}`);
+      }
+      const rowIn = src.subarray(rowStart + 1, rowStart + 1 + stride);
+      const rowOut = out.subarray(y * stride, (y + 1) * stride);
+
+      for (let i = 0; i < stride; i++) {
+        const left = i >= bpp ? rowOut[i - bpp] : 0;
+        const up = prevRecon[i] ?? 0;
+        const upLeft = i >= bpp ? (prevRecon[i - bpp] ?? 0) : 0;
+        let v = rowIn[i];
         switch (filter) {
-          case 1: v = (v + left) & 0xff; break;
-          case 2: v = (v + up) & 0xff; break;
-          case 3: v = (v + ((left + up) >>> 1)) & 0xff; break;
-          case 4: {
-            const p = left + up - upLeft;
-            const pa = Math.abs(p - left);
-            const pb = Math.abs(p - up);
-            const pc = Math.abs(p - upLeft);
-            v = (v + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft)) & 0xff;
+          case 0:
             break;
-          }
+          case 1:
+            v = (v + left) & 0xff;
+            break;
+          case 2:
+            v = (v + up) & 0xff;
+            break;
+          case 3:
+            v = (v + ((left + up) >>> 1)) & 0xff;
+            break;
+          case 4:
+            v = (v + paeth(left, up, upLeft)) & 0xff;
+            break;
         }
-        
-        // Map to output channels
-        if (colorType === 0) { // Grayscale
-          data[outIdx] = data[outIdx+1] = data[outIdx+2] = v;
-        } else if (colorType === 3) { // Indexed
-          if (!palette) throw new Error('PNG: Missing palette for indexed image');
-          data[outIdx] = palette[v * 3];
-          data[outIdx+1] = palette[v * 3 + 1];
-          data[outIdx+2] = palette[v * 3 + 2];
-        } else {
-          data[outIdx + c] = v;
+        rowOut[i] = v;
+      }
+
+      prevRecon = rowOut;
+      offset += rowBytes;
+    }
+
+    return { rows: out, consumed: needed };
+  };
+
+  const rawPixels = new Uint8Array(width * height * bpp);
+  if (interlaceMethod === 0) {
+    const { rows } = unfilter(raw, width, height);
+    rawPixels.set(rows);
+  } else {
+    const passes: Array<[number, number, number, number]> = [
+      [0, 0, 8, 8],
+      [4, 0, 8, 8],
+      [0, 4, 4, 8],
+      [2, 0, 4, 4],
+      [0, 2, 2, 4],
+      [1, 0, 2, 2],
+      [0, 1, 1, 2],
+    ];
+
+    let cursor = 0;
+    for (const [xStart, yStart, xStep, yStep] of passes) {
+      const passWidth = xStart >= width ? 0 : Math.ceil((width - xStart) / xStep);
+      const passHeight = yStart >= height ? 0 : Math.ceil((height - yStart) / yStep);
+      if (passWidth <= 0 || passHeight <= 0) continue;
+      const { rows, consumed } = unfilter(raw.subarray(cursor), passWidth, passHeight);
+      cursor += consumed;
+
+      for (let py = 0; py < passHeight; py++) {
+        for (let px = 0; px < passWidth; px++) {
+          const dstX = xStart + px * xStep;
+          const dstY = yStart + py * yStep;
+          const srcIdx = (py * passWidth + px) * bpp;
+          const dstIdx = (dstY * width + dstX) * bpp;
+          for (let c = 0; c < bpp; c++) {
+            rawPixels[dstIdx + c] = rows[srcIdx + c];
+          }
         }
       }
     }
-    // Update prevRow with reconstructed values for next line
-    for(let i=0; i<width*bpp; i++) prevRow[i] = data[y*width*channels + i]; // Simplified for RGB/RGBA
+  }
+
+  const data = new Uint8Array(width * height * channels);
+  for (let y = 0; y < height; y++) {
+    if (y % 100 === 0) await new Promise((resolve) => setImmediate(resolve));
+    for (let x = 0; x < width; x++) {
+      const outIdx = (y * width + x) * channels;
+      const srcIdx = (y * width + x) * bpp;
+      if (colorType === 0) {
+        const g = rawPixels[srcIdx];
+        data[outIdx] = g;
+        data[outIdx + 1] = g;
+        data[outIdx + 2] = g;
+      } else if (colorType === 3) {
+        if (!palette) throw new Error('PNG: Missing palette for indexed image');
+        const idx = rawPixels[srcIdx];
+        const p = idx * 3;
+        data[outIdx] = palette[p];
+        data[outIdx + 1] = palette[p + 1];
+        data[outIdx + 2] = palette[p + 2];
+      } else if (colorType === 2) {
+        data[outIdx] = rawPixels[srcIdx];
+        data[outIdx + 1] = rawPixels[srcIdx + 1];
+        data[outIdx + 2] = rawPixels[srcIdx + 2];
+      } else if (colorType === 6) {
+        data[outIdx] = rawPixels[srcIdx];
+        data[outIdx + 1] = rawPixels[srcIdx + 1];
+        data[outIdx + 2] = rawPixels[srcIdx + 2];
+        data[outIdx + 3] = rawPixels[srcIdx + 3];
+      } else {
+        throw new Error(`PNG: unsupported color type ${colorType}`);
+      }
+    }
   }
   return { shape: [width, height, channels], data };
+}
+
+function isSvgBuffer(buffer: Buffer): boolean {
+  const start = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('utf8').trimStart();
+  return start.startsWith('<svg') || (start.startsWith('<?xml') && start.includes('<svg'));
+}
+
+async function parseSvg(buffer: Buffer): Promise<PixelsResult> {
+  if (!isSvgBuffer(buffer)) {
+    throw new Error('Invalid SVG: expected <svg root element');
+  }
+  const svgText = buffer.toString('utf8');
+  const resvg = new Resvg(svgText, {
+    fitTo: { mode: 'original' },
+    background: 'white',
+  });
+  const pngData = resvg.render().asPng();
+  const parsed = await parsePng(Buffer.from(pngData));
+
+  // Flatten RGBA over white background for better thermal binarization stability.
+  if (parsed.shape[2] === 4) {
+    const [w, h] = parsed.shape;
+    const rgb = new Uint8Array(w * h * 3);
+    for (let i = 0, j = 0; i < parsed.data.length; i += 4, j += 3) {
+      const r = parsed.data[i];
+      const g = parsed.data[i + 1];
+      const b = parsed.data[i + 2];
+      const a = parsed.data[i + 3];
+      rgb[j] = Math.round((r * a + 255 * (255 - a)) / 255);
+      rgb[j + 1] = Math.round((g * a + 255 * (255 - a)) / 255);
+      rgb[j + 2] = Math.round((b * a + 255 * (255 - a)) / 255);
+    }
+    return { shape: [w, h, 3], data: rgb };
+  }
+  return parsed;
 }
 
 /**
@@ -262,6 +402,9 @@ async function parseGif(buffer: Buffer): Promise<PixelsResult> {
 
 export async function decodeImageBuffer(buffer: Buffer, mimeOrExt?: string): Promise<PixelsResult> {
   const hint = (mimeOrExt ?? '').toLowerCase();
+  if (isSvgBuffer(buffer)) {
+    return parseSvg(buffer);
+  }
   if (buffer[0] === 0x42 && buffer[1] === 0x4d) {
     return parseBmp(buffer);
   }
@@ -286,8 +429,11 @@ export async function decodeImageBuffer(buffer: Buffer, mimeOrExt?: string): Pro
   if (hint.includes('gif') || hint.endsWith('.gif')) {
     return parseGif(buffer);
   }
+  if (hint.includes('svg') || hint.endsWith('.svg')) {
+    return parseSvg(buffer);
+  }
   throw new Error(
-    'Unsupported image format: use BMP, PNG, JPEG, or GIF; or pass pixels to new Image(pixels)'
+    'Unsupported image format: use BMP, PNG, JPEG, GIF, or SVG; or pass pixels to new Image(pixels)'
   );
 }
 

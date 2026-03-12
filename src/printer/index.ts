@@ -148,6 +148,8 @@ export class Printer {
     return this.profile.getTicketPresentationCommand?.(merged) ?? this.profile.paperEjectAfterCut;
   }
 
+  private ioChain: Promise<void> = Promise.resolve();
+
   constructor(adapter: AdapterLike, options?: PrinterOptions) {
     this.adapter = adapter;
     this.options = options;
@@ -169,6 +171,12 @@ export class Printer {
     this.styleMap = buildStyleMap(this.commands);
     this.encoding = options?.encoding ?? 'utf8';
     this.width = options?.width ?? profile?.defaultPaperWidth ?? 80;
+  }
+
+  private enqueueIo<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.ioChain.then(task, task);
+    this.ioChain = run.then(() => undefined, () => undefined);
+    return run;
   }
 
   /**
@@ -828,8 +836,10 @@ export class Printer {
    * Returns a Buffer with the status byte.
    */
   async getStatus(type: 'PRINTER' | 'OFFLINE' | 'ERROR' | 'PAPER' = 'PRINTER'): Promise<Buffer> {
-    const n = this.commands.STATUS[type];
-    await this.adapter.write(this.commands.STATUS.DLE_EOT(n));
-    return this.adapter.read();
+    return this.enqueueIo(async () => {
+      const n = this.commands.STATUS[type];
+      await this.adapter.write(this.commands.STATUS.DLE_EOT(n));
+      return this.adapter.read();
+    });
   }
 }

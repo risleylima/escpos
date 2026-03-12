@@ -11,15 +11,56 @@
  *   [2] host (default: 10.102.224.60)
  *   [3] port (default: 2000)
  *   [4] lingerMs antes de fechar socket (default: 2000)
+ *   [5] logoType: svg|jpg|jpeg|png|adam7|bmp|gif (default: jpg)
  */
 
-const { Network, Printer } = require('../dist/index.js');
+const path = require('path');
+const { Network, Printer, Image } = require('../dist/index.js');
 
 const HOST = process.argv[2] || '10.102.224.60';
 const PORT = parseInt(process.argv[3] || '2000', 10);
 const LINGER_MS = parseInt(process.argv[4] || '2000', 10);
 const CONNECT_TIMEOUT_MS = 10000;
 const WIDTH = 44;
+const LOGO_TYPE = (process.argv[5] || 'jpg').toLowerCase();
+
+const LOGO_VARIANTS = {
+  svg: {
+    file: '../assets/logo-ticket-node-byte.svg',
+    mime: 'image/svg+xml',
+    label: 'SVG',
+  },
+  jpg: {
+    file: '../assets/logo-ticket-node-byte.jpg',
+    mime: 'image/jpeg',
+    label: 'JPG',
+  },
+  jpeg: {
+    file: '../assets/logo-ticket-node-byte.jpg',
+    mime: 'image/jpeg',
+    label: 'JPG',
+  },
+  png: {
+    file: '../assets/logo-ticket-node-byte.png',
+    mime: 'image/png',
+    label: 'PNG',
+  },
+  adam7: {
+    file: '../assets/logo-ticket-node-byte-adam7.png',
+    mime: 'image/png',
+    label: 'PNG-ADAM7',
+  },
+  bmp: {
+    file: '../assets/logo-ticket-node-byte.bmp',
+    mime: 'image/bmp',
+    label: 'BMP',
+  },
+  gif: {
+    file: '../assets/logo-ticket-node-byte.gif',
+    mime: 'image/gif',
+    label: 'GIF',
+  },
+};
 
 function brl(value) {
   // ASCII only: avoids locale NBSP/control chars rendered as garbage on some codepages.
@@ -38,6 +79,15 @@ function buildOrder() {
 
 async function main() {
   const adapter = new Network();
+  const logoVariant = LOGO_VARIANTS[LOGO_TYPE];
+  if (!logoVariant) {
+    throw new Error(`Tipo de logo nao suportado: ${LOGO_TYPE}. Use: ${Object.keys(LOGO_VARIANTS).join(', ')}`);
+  }
+  const logoPath = path.resolve(__dirname, logoVariant.file);
+  const logo = await Image.load(logoPath, logoVariant.mime, {
+    mode: 'floydSteinberg',
+    threshold: 220,
+  });
   const printer = new Printer(adapter, {
     encoding: 'ascii',
     width: WIDTH,
@@ -59,10 +109,12 @@ async function main() {
   const service = subtotal * 0.1;
   const total = subtotal + service;
 
-  console.log(`Conectando em ${HOST}:${PORT} (high-level)...`);
+  console.log(`Conectando em ${HOST}:${PORT} (high-level, logo ${logoVariant.label})...`);
   await adapter.connect({ host: HOST, port: PORT, timeout: CONNECT_TIMEOUT_MS });
   await adapter.open();
-  console.log('Conectado. Montando ticket Cafe Node & Byte...');
+  console.log(
+    `Conectado. Montando ticket Cafe Node & Byte... (logo ${logoVariant.label} ${logo.size.width}x${logo.size.height})`
+  );
 
   printer
     .hardware('init')
@@ -70,6 +122,10 @@ async function main() {
 
   printer
     .align('ct')
+    .raster(logo)
+    .feed(1)
+    .textln(`TIPO LOGO: ${logoVariant.label}`)
+    .feed(1)
     .size(2, 2)
     .textln('CAFE NODE & BYTE')
     .size(1, 1)
