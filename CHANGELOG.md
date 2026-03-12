@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-03-12
+
+### Added
+- Barcode compatibility tests for newly aligned VKP80III paths:
+  - CODE32 acceptance/rejection by manual limits
+  - CODABAR opcode assertion
+  - CODE93/CODE128 format-2 framing checks
+  - CODE128 auto code-set prefix behavior.
+
+### Changed
+- VKP80III profile barcode map completed from `CUSTOM_COMMANDS.pdf` (GS k / GS w / GS h / HRI):
+  - explicit support mapping for CODABAR and CODE32
+  - explicit GS w width map (1..5 -> 0x01..0x05) with VKP80III defaults.
+- Command API docs and VKP80III profile guide expanded with complete barcode type coverage and framing notes.
+
+### Fixed
+- `barcode()` framing for CODE93/CODE128 now correctly follows GS k format 2 (length-prefixed payload with no trailing NUL).
+- CODE128 now auto-injects `{B` when no initial code set marker is provided, preventing `HRI NOT OK` on strict firmware.
+- CODE32 now validates 8-9 numeric digits and emits proper command path.
+
 ## [1.0.3] - 2026-03-12
 
 ### Added

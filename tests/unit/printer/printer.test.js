@@ -301,9 +301,9 @@ describe('Printer', () => {
     it('should use utils.codeLength for CODE128 (Buffer returning length)', () => {
       printer.barcode('123456', 'CODE128');
       const buffer = printer.buffer.flush();
-      // For length 6, buffer should contain byte 0x06 (not string '6')
-      // GS k 73 6 ...
-      expect(buffer).toContain(0x06);
+      // CODE128 now auto-prefixes code set B when omitted: "{B123456" (8 bytes).
+      // GS k 73 8 ...
+      expect(buffer).toContain(0x08);
     });
 
     it('should accept EAN13 with 13 digits without appending parity', () => {
@@ -335,6 +335,41 @@ describe('Printer', () => {
       const hex = p.buffer.flush().toString('hex').toLowerCase();
       expect(profile.buildBarcode).toHaveBeenCalled();
       expect(hex).toBe('');
+    });
+
+    it('should accept CODE32 with 8 or 9 numeric digits', () => {
+      expect(() => printer.barcode('12345678', 'CODE32')).not.toThrow();
+      expect(() => printer.barcode('123456789', 'CODE32')).not.toThrow();
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1d6b14');
+    });
+
+    it('should throw for CODE32 with invalid length or non-numeric', () => {
+      expect(() => printer.barcode('1234567', 'CODE32')).toThrow(/CODE32.*8 or 9 numeric/);
+      expect(() => printer.barcode('1234567890', 'CODE32')).toThrow(/CODE32.*8 or 9 numeric/);
+      expect(() => printer.barcode('12345678A', 'CODE32')).toThrow(/CODE32.*8 or 9 numeric/);
+    });
+
+    it('should emit CODABAR type (same opcode as NW7)', () => {
+      printer.barcode('A1234567B', 'CODABAR');
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1d6b06');
+    });
+
+    it('should not append NUL for format-2 CODE93/CODE128', () => {
+      printer.barcode('CODE93', 'CODE93');
+      const code93Hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(code93Hex.endsWith('00')).toBe(false);
+
+      printer.barcode('{BABC123', 'CODE128');
+      const code128Hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(code128Hex.endsWith('00')).toBe(false);
+    });
+
+    it('should prepend CODE128 code set B when omitted', () => {
+      printer.barcode('ABC123', 'CODE128');
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain(Buffer.from('{BABC123', 'ascii').toString('hex'));
     });
   });
 

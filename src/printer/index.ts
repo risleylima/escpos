@@ -571,15 +571,22 @@ export class Printer {
     const position = options.position;
     const font = options.font;
     const includeParity = options.includeParity !== false;
+    const normalizedType = String(type || 'EAN13').toUpperCase();
     const convertCode = String(code);
     let parityBit = '';
     let codeLen: Buffer = Buffer.alloc(0);
 
-    if (type === 'EAN13' && convertCode.length !== 12 && convertCode.length !== 13) {
+    if (normalizedType === 'EAN13' && convertCode.length !== 12 && convertCode.length !== 13) {
       throw new Error('EAN13 Barcode type requires code length 12 or 13');
     }
-    if (type === 'EAN8' && convertCode.length !== 7 && convertCode.length !== 8) {
+    if (normalizedType === 'EAN8' && convertCode.length !== 7 && convertCode.length !== 8) {
       throw new Error('EAN8 Barcode type requires code length 7 or 8');
+    }
+    if (
+      normalizedType === 'CODE32' &&
+      (convertCode.length < 8 || convertCode.length > 9 || !/^\d+$/.test(convertCode))
+    ) {
+      throw new Error('CODE32 Barcode type requires 8 or 9 numeric digits');
     }
 
     const bf = this.commands.BARCODE_FORMAT;
@@ -596,7 +603,7 @@ export class Printer {
     }
     const fontKey = 'BARCODE_FONT_' + (font || 'A').toUpperCase();
     const posKey = 'BARCODE_TXT_' + (position || 'BLW').toUpperCase();
-    const typeKey = 'BARCODE_' + (type || 'EAN13').replace('-', '_').toUpperCase();
+    const typeKey = 'BARCODE_' + normalizedType.replace('-', '_');
     const bfRecord: Record<string, unknown> = bf;
     const fontBuf = bfRecord[fontKey];
     const posBuf = bfRecord[posKey];
@@ -605,20 +612,24 @@ export class Printer {
     if (Buffer.isBuffer(posBuf)) this.buffer.write(posBuf);
     if (Buffer.isBuffer(typeBuf)) this.buffer.write(typeBuf);
 
-    if (includeParity && (type === 'EAN13' || type === 'EAN8')) {
+    if (includeParity && (normalizedType === 'EAN13' || normalizedType === 'EAN8')) {
       const expectsParity =
-        (type === 'EAN13' && convertCode.length === 12) ||
-        (type === 'EAN8' && convertCode.length === 7);
+        (normalizedType === 'EAN13' && convertCode.length === 12) ||
+        (normalizedType === 'EAN8' && convertCode.length === 7);
       if (expectsParity) parityBit = utils.getParityBit(code);
     }
-    if (type === 'CODE128' || type === 'CODE93') {
-      codeLen = utils.codeLength(code);
+    let payload = convertCode + (includeParity ? parityBit : '');
+    const format2Type = normalizedType === 'CODE128' || normalizedType === 'CODE93';
+    if (normalizedType === 'CODE128' && !/^\{[ABC]/.test(payload)) {
+      // GS k format 2 requires initial code set marker; default to CODE B for generic ASCII payload.
+      payload = `{B${payload}`;
     }
+    if (format2Type) codeLen = utils.codeLength(payload);
     this.buffer.write(
       Buffer.concat([
         codeLen,
-        Buffer.from(code + (includeParity ? parityBit : ''), 'ascii'),
-        Buffer.from('00', 'hex'),
+        Buffer.from(payload, 'ascii'),
+        ...(format2Type ? [] : [Buffer.from('00', 'hex')]),
       ])
     );
     return this;

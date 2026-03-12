@@ -65,11 +65,39 @@ export const customVkp80iiiProfile: PrinterProfile = {
       PAPER_CUT_A: Buffer.from('1D5641', 'hex'),
       PAPER_CUT_B: Buffer.from('1D5642', 'hex'),
     },
+    /**
+     * VKP80III 1D barcode (CUSTOM_COMMANDS.pdf p.61–64): GS k m [...].
+     * Format 1: m 0x00–0x08, 0x14 (CODE32). Format 2: m 0x41–0x49, 0x5A (CODE32).
+     * We use Format 1 for all types; CODE93/CODE128 use Format 2 (0x48/0x49) in driver (length-prefixed).
+     * GS w n: 0x01–0x06 (default 0x03). GS h n: height in dots (default 0xA2); we use 0x3C.
+     */
     BARCODE_FORMAT: {
+      BARCODE_TXT_OFF: Buffer.from('1D4800', 'hex'),
+      BARCODE_TXT_ABV: Buffer.from('1D4801', 'hex'),
+      BARCODE_TXT_BLW: Buffer.from('1D4802', 'hex'),
+      BARCODE_TXT_BTH: Buffer.from('1D4803', 'hex'),
+      BARCODE_FONT_A: Buffer.from('1D6600', 'hex'),
+      BARCODE_FONT_B: Buffer.from('1D6601', 'hex'),
+      BARCODE_WIDTH: {
+        1: Buffer.from('1D7701', 'hex'), // 0.125 mm
+        2: Buffer.from('1D7702', 'hex'), // 0.25 mm
+        3: Buffer.from('1D7703', 'hex'), // 0.375 mm (default)
+        4: Buffer.from('1D7704', 'hex'), // 0.5 mm
+        5: Buffer.from('1D7705', 'hex'), // 0.625 mm
+      },
       BARCODE_WIDTH_DEFAULT: Buffer.from('1D7703', 'hex'),
       BARCODE_HEIGHT_DEFAULT: Buffer.from('1D683C', 'hex'),
-      BARCODE_FONT_A: Buffer.from('1D6600', 'hex'),
-      BARCODE_TXT_BLW: Buffer.from('1D4802', 'hex'),
+      BARCODE_UPC_A: Buffer.from('1D6B00', 'hex'),
+      BARCODE_UPC_E: Buffer.from('1D6B01', 'hex'),
+      BARCODE_EAN13: Buffer.from('1D6B02', 'hex'),
+      BARCODE_EAN8: Buffer.from('1D6B03', 'hex'),
+      BARCODE_CODE39: Buffer.from('1D6B04', 'hex'),
+      BARCODE_ITF: Buffer.from('1D6B05', 'hex'),
+      BARCODE_NW7: Buffer.from('1D6B06', 'hex'),
+      BARCODE_CODABAR: Buffer.from('1D6B06', 'hex'),
+      BARCODE_CODE93: Buffer.from('1D6B48', 'hex'),
+      BARCODE_CODE128: Buffer.from('1D6B49', 'hex'),
+      BARCODE_CODE32: Buffer.from('1D6B14', 'hex'),
     },
     CODE2D_FORMAT: {
       GS_H: Buffer.from('1D286B', 'hex'),

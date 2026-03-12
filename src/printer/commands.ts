@@ -135,8 +135,12 @@ export const commands = {
     BARCODE_CODE39: Buffer.from('1D6B04', 'hex'),
     BARCODE_ITF: Buffer.from('1D6B05', 'hex'),
     BARCODE_NW7: Buffer.from('1D6B06', 'hex'),
+    /** CODABAR (same as NW7 in ESC/POS). */
+    BARCODE_CODABAR: Buffer.from('1D6B06', 'hex'),
     BARCODE_CODE93: Buffer.from('1D6B48', 'hex'),
     BARCODE_CODE128: Buffer.from('1D6B49', 'hex'),
+    /** CODE32 (Italian pharmacy, 8–9 digits). Format 1: GS k 0x14. */
+    BARCODE_CODE32: Buffer.from('1D6B14', 'hex'),
   },
   CODE2D_FORMAT: {
     TYPE_PDF417: Buffer.concat([Buffer.from('1D', 'hex'), Buffer.from('Z', 'ascii'), Buffer.from('00', 'hex')]),

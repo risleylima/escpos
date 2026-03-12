@@ -20,12 +20,29 @@ This document explains how `custom-vkp80iii` maps generic ESC/POS APIs to CUSTOM
   - `ejectCommandIncludesCut: true`
   - Means: when presenting ticket, we do **not** send `GS V` cut before `FS P`.
 
-### Barcode defaults for VKP80III profile
+### 1D Barcode (CUSTOM_COMMANDS.pdf p.57–64)
 
-- Width default: `1D 77 03`
-- Height default: `1D 68 3C`
-- Font A: `1D 66 00`
-- Text below: `1D 48 02`
+VKP80III supports **GS k** (1D 6B) with two formats. The profile aligns all types to the manual:
+
+| Type       | Format 1 (m) | Format 2 (m) | Notes                    |
+|-----------|---------------|--------------|--------------------------|
+| UPC-A     | 0x00          | 0x41         | 11–12 digits             |
+| UPC-E     | 0x01          | 0x42         | 11–12 digits             |
+| EAN13     | 0x02          | 0x43         | 12–13 digits             |
+| EAN8      | 0x03          | 0x44         | 7–8 digits               |
+| CODE39    | 0x04          | 0x45         |                          |
+| ITF       | 0x05          | 0x46         | Even number of digits    |
+| CODABAR/NW7 | 0x06        | 0x47         |                          |
+| CODE93    | 0x07          | 0x48         | Driver uses Format 2     |
+| CODE128   | 0x08          | 0x49         | Driver uses Format 2     |
+| CODE32    | 0x14          | 0x5A         | Italian pharmacy, 8–9 digits |
+
+- **GS w** (width): n = 0x01–0x06 (default 0x03). Profile maps width 1–5 to 0x01–0x05.
+- **GS h** (height): default in manual 0xA2; profile uses `1D 68 3C` (60 dots).
+- **GS H** (HRI position): OFF, ABV, BLW, BTH. Profile sets all four.
+- **GS f** (HRI font): A (0x00), B (0x01). Profile sets both.
+- **CODE93/CODE128 payload framing**: driver uses Format 2 (`m=0x48/0x49`) with length byte and no trailing `NUL`.
+- **CODE128 code set**: if payload does not start with `{A`, `{B`, or `{C`, driver auto-prefixes `{B`.
 
 ### QR command family
 

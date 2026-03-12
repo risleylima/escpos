@@ -175,7 +175,7 @@ printer.raster(logo, 'normal');
 
 Supported `type` values:
 
-- `UPC-A`, `UPC-E`, `EAN13`, `EAN8`, `CODE39`, `ITF`, `NW7`, `CODE93`, `CODE128`
+- `UPC-A`, `UPC-E`, `EAN13`, `EAN8`, `CODE39`, `ITF`, `NW7`, `CODABAR`, `CODE93`, `CODE128`, `CODE32`
 
 `BarcodeOptions`:
 
@@ -193,6 +193,10 @@ Validation notes:
 
 - `EAN13` requires 12 or 13 digits.
 - `EAN8` requires 7 or 8 digits.
+- `CODE32` (Italian pharmacy) requires 8 or 9 numeric digits.
+- `CODABAR` uses the same ESC/POS opcode as `NW7`.
+- `CODE93` and `CODE128` use GS k format 2 in this driver (length-prefixed, no trailing `NUL`).
+- `CODE128` requires a code set selector (`{A`, `{B`, `{C`); when omitted, the driver auto-prefixes `{B`.
 - Parity digit is auto-calculated when applicable and `includeParity !== false`.
 
 ### `qrcode(code, options?)`
