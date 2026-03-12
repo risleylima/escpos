@@ -11,7 +11,10 @@ jest.mock('usb', () => {
       transfer: jest.fn().mockImplementation((data, cb) => {
         if (cb) cb(null);
         return Promise.resolve(undefined);
-      })
+      }),
+      clearHalt: jest.fn().mockImplementation((cb) => {
+        if (cb) cb(null);
+      }),
     };
 
     const mockInterface = {
@@ -63,7 +66,6 @@ jest.mock('usb', () => {
   return {
     usb: {
       getDeviceList: jest.fn().mockReturnValue([mockDeviceInstance]),
-      findByIds: jest.fn().mockReturnValue(mockDeviceInstance),
       on: jest.fn(),
       removeListener: jest.fn()
     }
@@ -99,7 +101,7 @@ describe('USB Adapter', () => {
     it('should connect to device by VID/PID', async () => {
       const result = await adapter.connect(0x04b8, 0x0202);
       expect(result).toBe(true);
-      expect(usb.usb.findByIds).toHaveBeenCalledWith(0x04b8, 0x0202);
+      expect(usb.usb.getDeviceList).toHaveBeenCalled();
     });
 
     it('should connect to first available device if no VID/PID', async () => {
@@ -109,7 +111,6 @@ describe('USB Adapter', () => {
     });
 
     it('should throw error if device not found', async () => {
-      usb.usb.findByIds.mockReturnValueOnce(null);
       usb.usb.getDeviceList.mockReturnValueOnce([]);
 
       await expect(adapter.connect(9999, 9999)).rejects.toThrow('Cannot find printer!');
@@ -131,7 +132,7 @@ describe('USB Adapter', () => {
       const result = await adapter.open();
       expect(result).toBe(true);
       
-      const mockDevice = usb.usb.findByIds(0x04b8, 0x0202);
+      const mockDevice = usb.usb.getDeviceList.mock.results[0].value[0];
       expect(mockDevice.open).toHaveBeenCalled();
       expect(mockDevice.interfaces[0].claim).toHaveBeenCalled();
     });
@@ -148,8 +149,22 @@ describe('USB Adapter', () => {
       const result = await adapter.write(testData);
       expect(result).toBe(true);
       
-      const mockDevice = usb.usb.findByIds(0x04b8, 0x0202);
+      const mockDevice = usb.usb.getDeviceList.mock.results[0].value[0];
       expect(mockDevice.interfaces[0].endpoints[0].transfer).toHaveBeenCalledWith(testData, expect.any(Function));
+    });
+
+    it('should clear halt and retry once on stall', async () => {
+      const testData = Buffer.from('test', 'ascii');
+      const mockDevice = usb.usb.getDeviceList.mock.results[0].value[0];
+      const endpoint = mockDevice.interfaces[0].endpoints[0];
+      endpoint.transfer
+        .mockImplementationOnce((data, cb) => cb(new Error('LIBUSB_TRANSFER_STALL')))
+        .mockImplementationOnce((data, cb) => cb(null));
+
+      const result = await adapter.write(testData);
+      expect(result).toBe(true);
+      expect(endpoint.clearHalt).toHaveBeenCalledTimes(1);
+      expect(endpoint.transfer).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -163,9 +178,26 @@ describe('USB Adapter', () => {
       const result = await adapter.close();
       expect(result).toBe(true);
       
-      const mockDevice = usb.usb.findByIds(0x04b8, 0x0202);
+      const mockDevice = usb.usb.getDeviceList.mock.results[0].value[0];
       expect(mockDevice.interfaces[0].release).toHaveBeenCalled();
       expect(mockDevice.close).toHaveBeenCalled();
+    });
+  });
+
+  describe('recover', () => {
+    beforeEach(async () => {
+      await adapter.connect(0x04b8, 0x0202);
+      await adapter.open();
+    });
+
+    it('should close, reconnect and reopen device', async () => {
+      const result = await adapter.recover();
+      expect(result).toBe(true);
+
+      const mockDevice = usb.usb.getDeviceList.mock.results[0].value[0];
+      expect(mockDevice.close).toHaveBeenCalled();
+      expect(mockDevice.open).toHaveBeenCalledTimes(2); // initial open + recover open
+      expect(mockDevice.interfaces[0].claim).toHaveBeenCalledTimes(2);
     });
   });
 });

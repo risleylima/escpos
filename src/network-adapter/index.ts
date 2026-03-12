@@ -233,4 +233,26 @@ export class Network extends Adapter {
   async disconnect(options?: { timeout?: number }): Promise<boolean> {
     return this.close(options);
   }
+
+  /**
+   * Network-specific recovery:
+   * 1) close current socket
+   * 2) reopen using last configured host/port
+   */
+  async recover(): Promise<boolean> {
+    try {
+      await this.close();
+    } catch (e) {
+      debug('close failed during network recover: %s', (e as Error).message);
+    }
+
+    if (!this.options) {
+      this.state = 'DISCONNECTED';
+      return true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await this.open();
+    return true;
+  }
 }

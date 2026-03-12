@@ -100,4 +100,17 @@ export const customVkp80iiiProfile: PrinterProfile = {
     const d = toByte(vkp.paramD, 0x0a);
     return Buffer.concat([Buffer.from([0x1c, 0x50]), a, b, c, d]);
   },
+  /**
+   * Recovery baseline for VKP80III in ESC/POS mode.
+   * Keep it non-destructive: no cut/present commands (FS P) here.
+   */
+  buildRecoverCommand: ({ commands }): Buffer =>
+    Buffer.concat([
+      commands.HARDWARE.HW_INIT, // ESC @
+      commands.TEXT_FORMAT.TXT_ALIGN_LT, // ESC a 0
+      commands.LINE_SPACING.LS_DEFAULT, // ESC 2
+      commands.TEXT_FORMAT.TXT_NORMAL, // ESC ! 0
+      commands.TEXT_FORMAT.TXT_FONT_A, // ESC M 0
+      commands.TEXT_FORMAT.TXT_UNDERL_OFF, // ESC - 0
+    ]),
 };

@@ -101,7 +101,7 @@ Use this when printer is VKP80III:
 ```ts
 const printer = new Printer(adapter, {
   encoding: 'ascii',
-  width: 44,
+  width: 48,
   profile: 'custom-vkp80iii',
   ticketPresentation: { paramA: 0x14, paramB: 0x01, paramC: 0x45, paramD: 0x0A }
 });
@@ -118,6 +118,15 @@ printer
 
 ## 7) Debug checklist
 
-- Keep width aligned to real printable area (`44` chars in your validated setup).
+- Keep width aligned to the profile baseline (`48` chars by default).
 - Prefer ASCII in price formatting (`R$ 47,90`) to avoid codepage artifacts.
 - Add a short linger before socket close after flush (example: `1500-3000ms`) when presenter timing is sensitive.
+
+## 8) Recover baseline
+
+`custom-vkp80iii` also implements `buildRecoverCommand(...)` to restore a safe ESC/POS baseline after transport/protocol errors.
+
+Recover flow intentionally avoids side effects:
+
+- Includes baseline reset (`ESC @`, align left, default line spacing, normal text, font A, underline off).
+- Does **not** include `FS P` (present/cut side effects are not part of recover).

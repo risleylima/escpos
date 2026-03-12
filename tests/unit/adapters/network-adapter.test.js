@@ -87,4 +87,16 @@ describe('Network Adapter', () => {
     await adapter.open();
     expect(global.mockSockets.length).toBe(2);
   });
+
+  it('should recover by closing and reopening last endpoint', async () => {
+    const adapter = new NetworkClass();
+    await adapter.connect('127.0.0.1', 9100);
+    await adapter.open();
+    const first = global.mockSockets[global.mockSockets.length - 1].socket;
+
+    const result = await adapter.recover();
+    expect(result).toBe(true);
+    expect(first.end).toHaveBeenCalled();
+    expect(net.createConnection).toHaveBeenCalledTimes(2);
+  });
 });

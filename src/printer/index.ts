@@ -21,6 +21,7 @@ import type {
 import * as utils from './utils';
 import { Image } from './image';
 import type { AdapterLike } from '../adapter';
+import qrcodeGenerator = require('qrcode-generator');
 
 export interface PrinterOptions {
   encoding?: string;
@@ -61,6 +62,26 @@ export interface PresentTicketOptions extends TicketPresentationOptions {
   part?: boolean;
 }
 
+export interface RecoverOptions {
+  /** Run adapter-level recovery hook before printer recovery command. Default: true */
+  transport?: boolean;
+  /** Request DLE EOT status bytes after recovery. Default: false */
+  checkStatus?: boolean;
+  /** Optional wait between init and status read. Default: 120ms */
+  settleMs?: number;
+  /** If true, the current buffer content is NOT cleared during recovery. Default: false */
+  keepBuffer?: boolean;
+}
+
+export interface RecoverResult {
+  printer?: Buffer;
+  offline?: Buffer;
+  error?: Buffer;
+  paper?: Buffer;
+  /** The content of the buffer that was flushed during recovery (if keepBuffer was false). */
+  discardedBuffer?: Buffer;
+}
+
 class SpecBuffer {
   private chunks: Buffer[];
   private currentSize: number = 0;
@@ -82,6 +103,11 @@ class SpecBuffer {
 
   prepend(data: Buffer): void {
     if (data.length === 0) return;
+    if (this.currentSize + data.length > this.maxSize) {
+      // In case of prepend during recovery, we might exceed limit if user doesn't clear.
+      // We still allow it but emit a warning as it's a critical path.
+      console.warn(`[escpos] Warning: Buffer limit exceeded during prepend operation.`);
+    }
     this.chunks.unshift(data);
     this.currentSize += data.length;
   }
@@ -702,7 +728,7 @@ export class Printer {
     const buf = this.buffer.flush();
     if (buf.length === 0) return this;
     try {
-      await this.adapter.write(buf);
+      await this.enqueueIo(() => this.adapter.write(buf));
     } catch (error) {
       // Preserve payload for retry in caller-controlled recovery flows.
       this.buffer.prepend(buf);
@@ -715,7 +741,7 @@ export class Printer {
     const buf = this.buffer.flush();
     if (buf.length > 0) {
       try {
-        await this.adapter.write(buf);
+        await this.enqueueIo(() => this.adapter.write(buf));
       } catch (error) {
         this.buffer.prepend(buf);
         throw error;
@@ -755,21 +781,15 @@ export class Printer {
     return this;
   }
 
-  /**
-   * Modern QR Code implementation using GS ( k.
-   * QR sequence (cn=49): fn=65 (model), fn=67 (module size), fn=69 (EC level), fn=80 (store), fn=81 (print).
-   */
-  qrcode(
-    code: string,
-    options: QrCodeOptions = {}
-  ): this {
+  private writeNativeQrCode(code: string, options: QrCodeOptions): void {
     const profileBuf = this.profile?.buildQrCode?.(code, options, {
       commands: this.commands,
     });
     if (Buffer.isBuffer(profileBuf)) {
       this.buffer.write(profileBuf);
-      return this;
+      return;
     }
+
     const model = options.model ?? 2;
     const size = options.size ?? 6;
     const level = (options.level ?? 'L').toUpperCase();
@@ -793,7 +813,92 @@ export class Printer {
 
     // 5. Print QR Code (Function 181)
     this.buffer.write(Buffer.concat([cmd, Buffer.from([0x03, 0x00, 0x31, 0x51, 0x30])]));
+  }
 
+  private writeRasterQrCode(code: string, options: QrCodeOptions): void {
+    const level = (options.level ?? 'M').toUpperCase() as 'L' | 'M' | 'Q' | 'H';
+    const dotSize = Math.max(1, Math.min(16, Math.floor(options.size ?? 6)));
+    const position = options.position?.toLowerCase();
+    const offsetCols = Number.isFinite(Number(options.offsetCols))
+      ? Math.floor(Number(options.offsetCols))
+      : 0;
+    const offsetPx = offsetCols * 8;
+    const quietZone = 4;
+
+    if (position === 'center') this.buffer.write(this.commands.TEXT_FORMAT.TXT_ALIGN_CT);
+    else if (position === 'right') this.buffer.write(this.commands.TEXT_FORMAT.TXT_ALIGN_RT);
+    else if (position === 'left') this.buffer.write(this.commands.TEXT_FORMAT.TXT_ALIGN_LT);
+
+    const qr = qrcodeGenerator(0, level);
+    qr.addData(code, 'Byte');
+    qr.make();
+
+    const modules = qr.getModuleCount();
+    const contentPx = (modules + quietZone * 2) * dotSize;
+    const extraLeftPx = Math.max(0, -offsetPx);
+    const extraRightPx = Math.max(0, offsetPx);
+    const canvasPx = contentPx + extraLeftPx + extraRightPx;
+    const leftPaddingPx = offsetPx + extraLeftPx;
+    const widthBytes = Math.ceil(canvasPx / 8);
+    const raster = Buffer.alloc(widthBytes * contentPx);
+
+    for (let y = 0; y < contentPx; y++) {
+      const moduleY = Math.floor(y / dotSize) - quietZone;
+      for (let x = 0; x < contentPx; x++) {
+        const moduleX = Math.floor(x / dotSize) - quietZone;
+        const dark =
+          moduleX >= 0 &&
+          moduleX < modules &&
+          moduleY >= 0 &&
+          moduleY < modules &&
+          qr.isDark(moduleY, moduleX);
+        if (!dark) continue;
+        const outX = x + leftPaddingPx;
+        const index = y * widthBytes + (outX >> 3);
+        raster[index] |= 0x80 >> (outX & 0x07);
+      }
+    }
+
+    const width = Buffer.allocUnsafe(2);
+    width.writeUInt16LE(widthBytes, 0);
+    const height = Buffer.allocUnsafe(2);
+    height.writeUInt16LE(contentPx, 0);
+    this.buffer.write(
+      Buffer.concat([this.commands.GSV0_FORMAT.GSV0_NORMAL, width, height, raster])
+    );
+  }
+
+  /**
+   * QR Code emission strategy:
+   * - native: ESC/POS GS ( k flow.
+   * - raster: rendered matrix sent as GS v 0 bitmap.
+   * - auto: profile-driven (fallback to raster on native hook failures).
+   */
+  qrcode(
+    code: string,
+    options: QrCodeOptions = {}
+  ): this {
+    const strategy = options.strategy ?? this.profile?.qrCodeStrategy ?? 'native';
+    if (strategy === 'raster') {
+      this.writeRasterQrCode(code, options);
+      return this;
+    }
+
+    if (strategy === 'auto') {
+      const profileSupportsNative = this.profile?.supportsNativeQrCode ?? true;
+      if (!profileSupportsNative) {
+        this.writeRasterQrCode(code, options);
+        return this;
+      }
+      try {
+        this.writeNativeQrCode(code, options);
+      } catch {
+        this.writeRasterQrCode(code, options);
+      }
+      return this;
+    }
+
+    this.writeNativeQrCode(code, options);
     return this;
   }
 
@@ -806,6 +911,13 @@ export class Printer {
     type: 'PDF417' | 'DATAMATRIX' | 'QR' = 'QR',
     level?: 'L' | 'M' | 'Q' | 'H'
   ): this {
+    const profileBuf = this.profile?.buildCode2d?.(code, type, level, {
+      commands: this.commands,
+    });
+    if (Buffer.isBuffer(profileBuf)) {
+      this.buffer.write(profileBuf);
+      return this;
+    }
     const f = this.commands.CODE2D_FORMAT;
     const typeMap = {
       PDF417: f.TYPE_PDF417,
@@ -840,6 +952,58 @@ export class Printer {
       const n = this.commands.STATUS[type];
       await this.adapter.write(this.commands.STATUS.DLE_EOT(n));
       return this.adapter.read();
+    });
+  }
+
+  /**
+   * Recover transport + generic ESC/POS runtime state.
+   * Intended for post-error cleanup before retrying jobs.
+   */
+  async recover(options: RecoverOptions = {}): Promise<RecoverResult> {
+    return this.enqueueIo(async () => {
+      const transport = options.transport !== false;
+      const checkStatus = options.checkStatus === true;
+      const settleMs = Math.max(0, Math.floor(options.settleMs ?? 120));
+      const keepBuffer = options.keepBuffer === true;
+
+      // Drop pending payload on recovery unless keepBuffer is set.
+      const discardedBuffer = keepBuffer ? undefined : this.buffer.flush();
+      this.currentCodepage = undefined;
+
+      if (transport && typeof this.adapter.recover === 'function') {
+        await this.adapter.recover();
+      }
+
+      const recoverCmd =
+        this.profile?.buildRecoverCommand?.({ commands: this.commands }) ??
+        this.commands.HARDWARE.HW_INIT;
+      await this.adapter.write(recoverCmd);
+
+      if (settleMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, settleMs));
+      }
+
+      const out: RecoverResult = { discardedBuffer };
+      if (!checkStatus) return out;
+
+      const canRead = typeof this.adapter.read === 'function';
+      if (!canRead) return out;
+
+      const probe = async (key: keyof RecoverResult, n: number) => {
+        try {
+          await this.adapter.write(this.commands.STATUS.DLE_EOT(n));
+          const res = await this.adapter.read();
+          if (key !== 'discardedBuffer') (out as any)[key] = res;
+        } catch {
+          // Best-effort status probing.
+        }
+      };
+
+      await probe('printer', this.commands.STATUS.PRINTER);
+      await probe('offline', this.commands.STATUS.OFFLINE);
+      await probe('error', this.commands.STATUS.ERROR);
+      await probe('paper', this.commands.STATUS.PAPER);
+      return out;
     });
   }
 }

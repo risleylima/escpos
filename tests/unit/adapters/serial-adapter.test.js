@@ -130,4 +130,20 @@ describe('Serial Adapter', () => {
       expect(mockPort.close).toHaveBeenCalled();
     });
   });
+
+  describe('recover', () => {
+    beforeEach(async () => {
+      await adapter.connect('/dev/ttyUSB0');
+      await adapter.open();
+    });
+
+    it('should recover by closing and reopening configured port', async () => {
+      const result = await adapter.recover();
+      expect(result).toBe(true);
+
+      const mockPort = SerialPort.mock.results[0].value;
+      expect(mockPort.close).toHaveBeenCalled();
+      expect(mockPort.open).toHaveBeenCalledTimes(2); // first open + recover open
+    });
+  });
 });

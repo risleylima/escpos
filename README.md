@@ -99,6 +99,11 @@ await printer.flush();
 await adapter.close();
 ```
 
+### Complete Command Documentation
+
+- Full method-by-method reference: [`docs/architecture/COMMANDS_API.md`](./docs/architecture/COMMANDS_API.md)
+- Practical usage patterns: [`docs/architecture/COMMANDS_RECIPES.md`](./docs/architecture/COMMANDS_RECIPES.md)
+
 ---
 
 ## 🔳 QR Code Strategies

@@ -56,8 +56,17 @@ For models that require non-standard payload assembly:
 
 - `buildBarcode(code, type, options, context)`
 - `buildQrCode(code, options, context)`
+- `buildCode2d(code, type, level, context)`
+- `buildRecoverCommand(context)`
 
 If a hook returns a `Buffer`, it fully overrides the default `Printer` implementation for that operation.
+
+`buildRecoverCommand(context)` is used by `Printer.recover(...)` to restore a model-specific baseline
+after transport or protocol errors. Keep this sequence non-destructive whenever possible.
+For example:
+
+- Include mode reset and baseline formatting (`ESC @`, alignment, line spacing, font, underline state).
+- Avoid presentation/cut side effects in recover flows unless model behavior explicitly requires it.
 
 ## Runtime registration
 
@@ -94,5 +103,6 @@ Rules:
 - Merged command set contains intended overrides.
 - `presentTicket()` emits expected sequence.
 - Barcode and QR hooks (if any) are called and override default path.
+- `recover()` emits profile-specific recovery sequence (if `buildRecoverCommand` is implemented).
 - Unknown/missing options fail fast via `validateTicketPresentationOptions` (only for models
   that implement ticket presentation hooks).

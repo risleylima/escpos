@@ -9,6 +9,7 @@ This directory contains accumulated knowledge and technical specifications to en
 - Transactional `flush()` with payload preservation on adapter write failures.
 - Serialized printer I/O for critical operations.
 - Profile registry isolation support (`createProfileRegistry(...)`) for multi-tenant use cases.
+- Transport + printer recovery flow (`recover()`) with profile-specific baseline reset hook.
 
 ### 1. [Architecture & Design](./architecture/ARCHITECTURE.md)
 Decisions on SOLID patterns, `SpecBuffer` performance, and memory management.
@@ -25,13 +26,19 @@ Profile baseline for Bematech MP-4200 TH in ESC/POS mode.
 ### 5. [Profile Contract Standard](./architecture/PROFILE_CONTRACT.md)
 Generic extension contract for adding and validating new printer profiles.
 
-### 6. [Hardware Specifications (PDF Manuals)](./specs/)
+### 6. [Printer Commands API](./architecture/COMMANDS_API.md)
+Comprehensive reference for the high-level `Printer` command abstraction, including method signatures, accepted values, defaults, and reliability behavior.
+
+### 7. [Printer Commands Recipes](./architecture/COMMANDS_RECIPES.md)
+Practical copy-paste patterns for common ticket flows (layout, QR/barcode, images, recover, and profile-aware presentation).
+
+### 8. [Hardware Specifications (PDF Manuals)](./specs/)
 Original manufacturer files (Epson, Custom, etc.) used to validate the implementation.
 
-### 7. [Feature Roadmap](./architecture/FEATURES_ROADMAP.md)
+### 9. [Feature Roadmap](./architecture/FEATURES_ROADMAP.md)
 Future planning and pending functionalities.
 
-### 8. [Versioning Rules](./architecture/VERSIONING.md)
+### 10. [Versioning Rules](./architecture/VERSIONING.md)
 Semantic Versioning (SemVer) policies applied to the project.
 
 ---

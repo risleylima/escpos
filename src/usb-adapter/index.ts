@@ -18,6 +18,8 @@ export class USB extends Adapter {
   private device: Device | null = null;
   private endpoint: OutEndpoint | null = null;
   private detachHandler: ((device: Device) => void) | null = null;
+  private lastVid?: number;
+  private lastPid?: number;
 
   static async listUSB(): Promise<Array<{ manufacturer?: string; product?: string; vendorId: number; productId: number }>> {
     const devices = usb.getDeviceList().filter((device: Device) => {
@@ -67,6 +69,8 @@ export class USB extends Adapter {
 
   async connect(vid?: number, pid?: number): Promise<boolean> {
     return this.synchronized(async () => {
+      this.lastVid = vid;
+      this.lastPid = pid;
       this.device = null;
       this.endpoint = null;
 
@@ -76,7 +80,16 @@ export class USB extends Adapter {
       }
 
       if (vid != null && pid != null) {
-        this.device = (usb as any).findByIds(vid, pid);
+        this.device = usb.getDeviceList().find((d: Device) => {
+          try {
+            return (
+              d.deviceDescriptor?.idVendor === vid &&
+              d.deviceDescriptor?.idProduct === pid
+            );
+          } catch {
+            return false;
+          }
+        }) ?? null;
       } else {
         const fullList = usb.getDeviceList().filter((d: Device) => {
           try {
@@ -119,24 +132,38 @@ export class USB extends Adapter {
       const interfaces = this.device.interfaces;
       if (!interfaces?.length) throw new Error('Cannot access device interfaces');
 
-      for (const interfaceObj of interfaces) {
+      const preferred = interfaces.filter((iface) => iface.descriptor?.bInterfaceClass === IFACE_CLASS.PRINTER);
+      const candidates = preferred.length > 0 ? preferred : interfaces;
+
+      for (const interfaceObj of candidates) {
         if (this.endpoint) break;
-        const descriptor = interfaceObj.descriptor;
-        if (descriptor?.bInterfaceClass !== IFACE_CLASS.PRINTER) continue;
+        try {
+          if (os.platform() !== 'win32' && (interfaceObj as any).isKernelDriverActive()) {
+            try {
+              (interfaceObj as any).detachKernelDriver();
+            } catch (e) {
+              // Some devices/drivers on macOS deny detach (LIBUSB_ERROR_ACCESS),
+              // but claim() can still succeed. Keep this non-fatal.
+              debug('Could not detach kernel driver, continuing: %s', (e as Error).message);
+            }
+          }
 
-        if (os.platform() !== 'win32' && (interfaceObj as any).isKernelDriverActive()) {
-          try { (interfaceObj as any).detachKernelDriver(); } 
-          catch (e) { throw new Error(`[ERROR] Could not detach kernel driver: ${(e as Error).message}`); }
-        }
-
-        interfaceObj.claim();
-        for (const endpoint of interfaceObj.endpoints) {
-          if (endpoint.direction === 'out') {
-            this.endpoint = endpoint as OutEndpoint;
-            this.state = 'READY';
-            this.emit('open', this.device);
-            debug('Device Opened!');
-            break;
+          interfaceObj.claim();
+          for (const endpoint of interfaceObj.endpoints) {
+            if (endpoint.direction === 'out') {
+              this.endpoint = endpoint as OutEndpoint;
+              this.state = 'READY';
+              this.emit('open', this.device);
+              debug('Device Opened!');
+              break;
+            }
+          }
+        } catch (e) {
+          debug('Could not claim USB interface: ', e);
+          try {
+            interfaceObj.release(true, () => {});
+          } catch {
+            // ignore interface cleanup errors in fallback attempts
           }
         }
       }
@@ -156,7 +183,18 @@ export class USB extends Adapter {
       try {
         for (let i = 0; i < data.length; i += CHUNK_SIZE) {
           const chunk = data.subarray(i, i + CHUNK_SIZE);
-          await this.writeChunk(chunk);
+          try {
+            await this.writeChunk(chunk);
+          } catch (e) {
+            const msg = (e as Error).message ?? '';
+            if (/STALL/i.test(msg)) {
+              debug('USB endpoint stalled, attempting clearHalt + retry');
+              await this.clearEndpointHalt();
+              await this.writeChunk(chunk);
+            } else {
+              throw e;
+            }
+          }
         }
         return true;
       } finally {
@@ -174,6 +212,20 @@ export class USB extends Adapter {
         } else {
           resolve();
         }
+      });
+    });
+  }
+
+  private clearEndpointHalt(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const ep = this.endpoint as any;
+      if (!ep || typeof ep.clearHalt !== 'function') {
+        resolve();
+        return;
+      }
+      ep.clearHalt((err: Error | null) => {
+        if (err) reject(err);
+        else resolve();
       });
     });
   }
@@ -218,5 +270,30 @@ export class USB extends Adapter {
 
   async disconnect(): Promise<boolean> {
     return this.close();
+  }
+
+  /**
+   * USB-specific recovery:
+   * 1) clear endpoint halt when available
+   * 2) close interface/device
+   * 3) reconnect using last VID/PID (or auto) and reopen endpoint
+   */
+  async recover(): Promise<boolean> {
+    try {
+      await this.clearEndpointHalt();
+    } catch (e) {
+      debug('clearEndpointHalt failed during recover: ', e);
+    }
+
+    try {
+      await this.close();
+    } catch (e) {
+      debug('close failed during recover: ', e);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await this.connect(this.lastVid, this.lastPid);
+    await this.open();
+    return true;
   }
 }

@@ -12,6 +12,7 @@
  *   [3] port (default: 2000)
  *   [4] lingerMs antes de fechar socket (default: 2000)
  *   [5] logoType: svg|jpg|jpeg|png|adam7|bmp|gif (default: jpg)
+ *   [6] qrStrategy: native|raster|auto (default: native)
  */
 
 const path = require('path');
@@ -23,6 +24,8 @@ const LINGER_MS = parseInt(process.argv[4] || '2000', 10);
 const CONNECT_TIMEOUT_MS = 10000;
 const WIDTH = 44;
 const LOGO_TYPE = (process.argv[5] || 'jpg').toLowerCase();
+const QR_STRATEGY = (process.argv[6] || 'native').toLowerCase();
+const QR_STRATEGIES = new Set(['native', 'raster', 'auto']);
 
 const LOGO_VARIANTS = {
   svg: {
@@ -78,6 +81,9 @@ function buildOrder() {
 }
 
 async function main() {
+  if (!QR_STRATEGIES.has(QR_STRATEGY)) {
+    throw new Error(`qrStrategy invalido: ${QR_STRATEGY}. Use native, raster ou auto.`);
+  }
   const adapter = new Network();
   const logoVariant = LOGO_VARIANTS[LOGO_TYPE];
   if (!logoVariant) {
@@ -159,7 +165,8 @@ async function main() {
     .drawLine('-')
     .align('ct')
     .textln('Acompanhe seu pedido')
-    .qrcode(`https://pedido.exemplo.local/${orderId}`, { size: 6, level: 'M' })
+    .qrcode(`https://pedido.exemplo.local/${orderId}`, { size: 6, level: 'M', strategy: QR_STRATEGY })
+    .textln(`QR STRATEGY: ${QR_STRATEGY.toUpperCase()}`)
     .feed(1)
     .barcode(barcodeEan13, 'EAN13', {
       width: 2,

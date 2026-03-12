@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-03-12
+
+### Added
+- Comprehensive command abstraction documentation:
+  - `docs/architecture/COMMANDS_API.md` (method-by-method reference)
+  - `docs/architecture/COMMANDS_RECIPES.md` (practical usage patterns)
+- New serial Bematech example: `examples/print-serial-bematech.js`.
+- Integration snapshots for QR payload generation strategy and profile behavior:
+  - `tests/integration/qr-payload-snapshots.test.js`.
+- Local type declaration for `qrcode-generator` (`src/types/qrcode-generator.d.ts`).
+
+### Changed
+- Recovery flow expanded and standardized across adapters and printer profile hooks, with serialized I/O safeguards and operational hardening for transport reinitialization.
+- QR behavior hardened for profile-driven strategy selection (`native` | `raster` | `auto`), including raster alignment calibration (`position`, `offsetCols`).
+- Bematech and VKP80III profile behavior aligned with profile contracts and recover baselines.
+- Architecture docs updated for command abstraction, profile extension points, and operational reliability guidance.
+- Project docs index and root README now include direct links to command API and recipe guides.
+
+### Fixed
+- Multiple adapter lifecycle edge cases for reconnect/close/recover under unstable links.
+- Printer buffer handling in failure/recovery paths to preserve retryability.
+- Consistency gaps in tests around profile behavior and printer command emission.
+
 ## [1.0.2] - 2026-03-11
 
 ### Added

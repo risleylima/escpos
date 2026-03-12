@@ -20,6 +20,21 @@ export abstract class Adapter extends EventEmitter {
     return this.state;
   }
 
+  /**
+   * Generic transport recovery hook.
+   * Concrete adapters can override with interface-specific behavior.
+   */
+  async recover(): Promise<boolean> {
+    return this.synchronized(async () => {
+      try {
+        await this.close();
+      } catch {
+        // Best-effort close during recovery.
+      }
+      return true;
+    });
+  }
+
   abstract connect(...args: unknown[]): Promise<boolean>;
   abstract open(): Promise<boolean>;
   abstract write(data: Buffer): Promise<boolean>;
@@ -32,5 +47,6 @@ export type AdapterLike = {
   write(data: Buffer): Promise<boolean>;
   read(): Promise<Buffer>;
   close(options?: { timeout?: number }): Promise<boolean>;
+  recover?(): Promise<boolean>;
   getState?(): string;
 };

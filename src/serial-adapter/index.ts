@@ -177,4 +177,26 @@ export class Serial extends Adapter {
   async disconnect(): Promise<boolean> {
     return this.close();
   }
+
+  /**
+   * Serial-specific recovery:
+   * 1) close current handle
+   * 2) reopen using last configured path/options
+   */
+  async recover(): Promise<boolean> {
+    try {
+      await this.close();
+    } catch (e) {
+      debug('close failed during serial recover: ', e);
+    }
+
+    if (!this.path) {
+      this.state = 'DISCONNECTED';
+      return true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await this.open();
+    return true;
+  }
 }

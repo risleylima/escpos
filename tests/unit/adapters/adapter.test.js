@@ -29,4 +29,10 @@ describe('Adapter', () => {
     expect(await adapter.write()).toBe(true);
     expect(await adapter.close()).toBe(true);
   });
+
+  it('should run default recover hook', async () => {
+    const closeSpy = jest.spyOn(adapter, 'close');
+    await expect(adapter.recover()).resolves.toBe(true);
+    expect(closeSpy).toHaveBeenCalled();
+  });
 });

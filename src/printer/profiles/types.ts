@@ -43,6 +43,24 @@ export interface QrCodeOptions {
   model?: number;
   size?: number;
   level?: 'L' | 'M' | 'Q' | 'H';
+  /**
+   * Horizontal placement for raster QR rendering.
+   * Used only when strategy resolves to `raster`.
+   */
+  position?: 'left' | 'center' | 'right';
+  /**
+   * Optional horizontal calibration in character columns for raster QR.
+   * Positive shifts to the right, negative shifts to the left.
+   * Used only when strategy resolves to `raster`.
+   */
+  offsetCols?: number;
+  /**
+   * QR emission strategy:
+   * - native: send ESC/POS native QR commands (GS ( k, cn=49).
+   * - raster: render QR matrix and send as raster image (GS v 0).
+   * - auto: pick profile default (falls back to raster when native is not supported/reliable).
+   */
+  strategy?: 'native' | 'raster' | 'auto';
 }
 
 export interface BarcodeBuildContext {
@@ -52,6 +70,14 @@ export interface BarcodeBuildContext {
 }
 
 export interface QrCodeBuildContext {
+  commands: CommandSet;
+}
+
+export interface Code2dBuildContext {
+  commands: CommandSet;
+}
+
+export interface RecoverBuildContext {
   commands: CommandSet;
 }
 
@@ -114,6 +140,33 @@ export interface PrinterProfile {
     options: QrCodeOptions | undefined,
     context: QrCodeBuildContext
   ) => Buffer | undefined;
+  /**
+   * Optional profile-specific 2D code command builder used by `Printer.code2d(...)`.
+   * Return Buffer to fully override default legacy ESC Z / GS Z behavior.
+   */
+  buildCode2d?: (
+    code: string,
+    type: 'PDF417' | 'DATAMATRIX' | 'QR',
+    level: 'L' | 'M' | 'Q' | 'H' | undefined,
+    context: Code2dBuildContext
+  ) => Buffer | undefined;
+  /**
+   * Optional profile-specific recovery command sequence.
+   * Used by `Printer.recover()` to restore a clean printer state.
+   */
+  buildRecoverCommand?: (
+    context: RecoverBuildContext
+  ) => Buffer | undefined;
+  /**
+   * Preferred QR emission strategy for this profile when caller does not provide one.
+   * Default behavior in Printer is `native`.
+   */
+  qrCodeStrategy?: 'native' | 'raster' | 'auto';
+  /**
+   * Declares whether native QR commands are known to be reliable for this model/firmware baseline.
+   * Used only when strategy is `auto`.
+   */
+  supportsNativeQrCode?: boolean;
   /**
    * Mapping of encoding name to codepage number (ESC t n).
    * Example: { 'utf8': 255, 'cp860': 3 }
