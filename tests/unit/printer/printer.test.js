@@ -252,6 +252,60 @@ describe('Printer', () => {
       expect(hex).toContain('1b4d00'); // font A
       expect(hex).not.toContain('1c50'); // FS P is not part of recover
     });
+
+    it('should not clear buffer when keepBuffer is true', async () => {
+      const p = new Printer(mockAdapter, { profile: 'default' });
+      p.text('kept');
+      const result = await p.recover({ keepBuffer: true, settleMs: 0 });
+      expect(result.discardedBuffer).toBeUndefined();
+      expect(p.buffer.flush().toString('ascii')).toBe('kept');
+    });
+
+    it('should not call adapter.recover when transport is false', async () => {
+      const adapterWithRecover = {
+        write: jest.fn().mockResolvedValue(true),
+        read: jest.fn().mockResolvedValue(Buffer.from([0x14])),
+        close: jest.fn().mockResolvedValue(true),
+        recover: jest.fn().mockResolvedValue(true),
+      };
+      const p = new Printer(adapterWithRecover, { profile: 'default' });
+      await p.recover({ transport: false, settleMs: 0 });
+      expect(adapterWithRecover.recover).not.toHaveBeenCalled();
+      expect(adapterWithRecover.write).toHaveBeenCalled();
+    });
+  });
+
+  describe('Close', () => {
+    it('should flush pending buffer then call adapter.close', async () => {
+      printer.text('pending');
+      await printer.close();
+      expect(mockAdapter.write).toHaveBeenCalledWith(expect.any(Buffer));
+      expect(mockAdapter.write.mock.calls[0][0].toString('ascii')).toContain('pending');
+      expect(mockAdapter.close).toHaveBeenCalled();
+    });
+
+    it('should prepend buffer and throw when adapter.write fails during close', async () => {
+      const failAdapter = {
+        write: jest.fn().mockRejectedValue(new Error('write failed')),
+        close: jest.fn().mockResolvedValue(true),
+      };
+      const p = new Printer(failAdapter);
+      p.text('data');
+      await expect(p.close()).rejects.toThrow('write failed');
+      expect(p.buffer.flush().toString('ascii')).toBe('data');
+    });
+  });
+
+  describe('getStatus when adapter has no read', () => {
+    it('should throw with stable message when adapter has no read method', async () => {
+      const writeOnlyAdapter = {
+        write: jest.fn().mockResolvedValue(true),
+        close: jest.fn().mockResolvedValue(true),
+      };
+      const p = new Printer(writeOnlyAdapter);
+      await expect(p.getStatus('PRINTER')).rejects.toThrow('Read not supported');
+      expect(writeOnlyAdapter.write).not.toHaveBeenCalled();
+    });
   });
 
   describe('Flush Reliability', () => {
@@ -309,6 +363,56 @@ describe('Printer', () => {
       // In CP850, 'á' (U+00E1) is 0xA0
       expect(hex).toContain('a0');
       expect(hex).not.toContain('c3a1'); // no UTF-8 sequence for á
+    });
+
+    it('should encode text with cp860 via iconv-lite (e.g. São Paulo)', () => {
+      const profile = {
+        id: 'test',
+        codepages: { 'cp860': 3 }
+      };
+      const customPrinter = new Printer(mockAdapter, { profile, encoding: 'cp860' });
+      customPrinter.text('São Paulo');
+      const buffer = customPrinter.buffer.flush();
+      const hex = buffer.toString('hex').toLowerCase();
+      expect(hex).toContain('1b7403'); // ESC t 3
+      // cp860 encoding produces single-byte chars (not UTF-8 multibyte)
+      expect(hex).not.toContain('c3a3'); // no UTF-8 for ã
+      expect(buffer.length).toBeGreaterThan(3); // ESC t 3 + encoded text
+    });
+
+    it('should fallback to utf8 when encoding is not supported by Buffer or iconv', () => {
+      const customPrinter = new Printer(mockAdapter, { encoding: 'invalid-encoding-xyz' });
+      customPrinter.text('hello');
+      const buffer = customPrinter.buffer.flush();
+      // Fallback encodes as utf8 (same as input for ASCII)
+      expect(buffer.toString('utf8')).toBe('hello');
+    });
+
+    it('should encode empty string without throwing', () => {
+      const customPrinter = new Printer(mockAdapter, { encoding: 'utf8' });
+      expect(() => customPrinter.text('')).not.toThrow();
+      const buffer = customPrinter.buffer.flush();
+      expect(buffer.length).toBe(0); // no profile codepage, no text => empty
+    });
+
+    it('should use Node Buffer for native encodings (latin1)', () => {
+      const profile = { id: 'test', codepages: { 'latin1': 4 } };
+      const customPrinter = new Printer(mockAdapter, { profile, encoding: 'latin1' });
+      customPrinter.text('café');
+      const buffer = customPrinter.buffer.flush();
+      const hex = buffer.toString('hex').toLowerCase();
+      // latin1: é = 0xe9 (Node Buffer.from handles it)
+      expect(hex).toContain('e9');
+      expect(hex).not.toContain('c3a9'); // no UTF-8
+    });
+
+    it('should handle chars outside BMP with iconv (cp850 replaces unsupported)', () => {
+      const profile = { id: 'test', codepages: { 'cp850': 2 } };
+      const customPrinter = new Printer(mockAdapter, { profile, encoding: 'cp850' });
+      customPrinter.text('emoji: \uD83D\uDE00');
+      const buffer = customPrinter.buffer.flush();
+      // iconv substitutes/replaces chars not in cp850; output should not crash
+      expect(buffer.length).toBeGreaterThan(0);
     });
   });
 
@@ -451,7 +555,182 @@ describe('Printer', () => {
       expect(hex).toContain(Buffer.from('DM123', 'ascii').toString('hex').toLowerCase());
     });
   });
-  
+
+  describe('paperWidth with profile getPaperWidthCommand', () => {
+    it('should send GS W (1d57) for custom-vkp80iii when paperWidth is set', () => {
+      const customPrinter = new Printer(mockAdapter, { profile: 'custom-vkp80iii', width: 48 });
+      customPrinter.paperWidth(48);
+      const hex = customPrinter.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1d57');
+    });
+  });
+
+  describe('margin', () => {
+    it('should send LEFT margin command with exact bytes (1b 6c size)', () => {
+      printer.margin('LEFT', 10);
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toBe('1b6c0a');
+    });
+    it('should send RIGHT margin command', () => {
+      printer.margin('RIGHT', 5);
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b51');
+      expect(hex).toContain('05');
+    });
+    it('should send BOTTOM margin command', () => {
+      printer.margin('BOTTOM', 3);
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b4e');
+      expect(hex).toContain('03');
+    });
+    it('should throw for invalid margin type', () => {
+      expect(() => printer.margin('INVALID', 1)).toThrow(/invalid type|LEFT|RIGHT|BOTTOM/i);
+    });
+  });
+
+  describe('lineSpace and spacing', () => {
+    it('should send default line spacing when lineSpace() called with null', () => {
+      printer.lineSpace(null);
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b32');
+    });
+    it('should send set line spacing when lineSpace(n) called', () => {
+      printer.lineSpace(8);
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b33');
+      expect(hex).toContain('08');
+    });
+    it('should send default character spacing when spacing() called with null', () => {
+      printer.spacing(null);
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b2000');
+    });
+    it('should send set character spacing when spacing(n) called', () => {
+      printer.spacing(4);
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b20');
+      expect(hex).toContain('04');
+    });
+    it('should throw for spacing(n) when n is out of range 0-255', () => {
+      expect(() => printer.spacing(256)).toThrow(/0 and 255|integer/i);
+      expect(() => printer.spacing(-1)).toThrow(/0 and 255|integer/i);
+    });
+    it('should throw for lineSpace(n) when n is out of range 0-255', () => {
+      expect(() => printer.lineSpace(256)).toThrow(/0 and 255|integer/i);
+      expect(() => printer.lineSpace(-1)).toThrow(/0 and 255|integer/i);
+    });
+  });
+
+  describe('color, cashdraw, beep', () => {
+    it('should send color 0 and color 1 commands', () => {
+      printer.color(0);
+      let hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b7200');
+      printer.color(1);
+      hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b7201');
+    });
+    it('should send cash drawer kick for pin 2 and pin 5', () => {
+      printer.cashdraw(2);
+      let hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b7000');
+      printer.cashdraw(5);
+      hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b7001');
+    });
+    it('should send beep command with n and t', () => {
+      printer.beep(2, 3);
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1b42');
+      expect(hex).toContain('02');
+      expect(hex).toContain('03');
+    });
+  });
+
+  describe('tableCustom with proportional widths', () => {
+    it('should convert decimal widths to character columns (0.5 = 50%)', () => {
+      const p = new Printer(mockAdapter, { width: 40 });
+      p.tableCustom([
+        { text: 'Left', width: 0.5, align: 'LEFT' },
+        { text: 'Right', width: 0.5, align: 'RIGHT' },
+      ]);
+      const buf = p.buffer.flush().toString('ascii');
+      expect(buf).toContain('Left');
+      expect(buf).toContain('Right');
+      const firstLine = buf.split('\n')[0];
+      expect(firstLine.length).toBe(40);
+    });
+  });
+
+  describe('section', () => {
+    it('should emit drawLine + centered title + drawLine', () => {
+      printer.section('MY SECTION');
+      const buf = printer.buffer.flush().toString('ascii');
+      expect(buf).toContain('MY SECTION');
+      const lines = buf.split('\n');
+      const linesWithWidthDashes = lines.filter((l) => (l.match(/-/g) || []).length === printer.width);
+      expect(linesWithWidthDashes.length).toBe(2);
+    });
+  });
+
+  describe('image and raster', () => {
+    it('should throw when image() receives non-Image instance', () => {
+      expect(() => printer.image({})).toThrow(/Only Image object supported/i);
+    });
+    it('should throw when raster() receives non-Image instance', () => {
+      expect(() => printer.raster({})).toThrow(/Only Image object supported/i);
+    });
+    it('should emit raster (GS v 0) when given Image instance', () => {
+      const { Image } = require('../../../dist');
+      const pixels = { shape: [8, 8, 3], data: new Uint8Array(8 * 8 * 3).fill(0) };
+      const img = new Image(pixels);
+      printer.raster(img, 'normal');
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1d763000');
+    });
+    it('should accept raster mode dw and normalize dhdw to dwdh', () => {
+      const { Image } = require('../../../dist');
+      const pixels = { shape: [8, 8, 3], data: new Uint8Array(8 * 8 * 3).fill(0) };
+      const img = new Image(pixels);
+      printer.raster(img, 'dw');
+      const hex = printer.buffer.flush().toString('hex').toLowerCase();
+      expect(hex).toContain('1d763001');
+    });
+  });
+
+  describe('font width heuristic', () => {
+    it('should set width to 42 for font A when options.width not set', () => {
+      const p = new Printer(mockAdapter);
+      p.font('A');
+      expect(p.width).toBe(42);
+    });
+    it('should set width to 56 for font B when options.width not set', () => {
+      const p = new Printer(mockAdapter);
+      p.font('B');
+      expect(p.width).toBe(56);
+    });
+    it('should keep options.width when font A and width option set', () => {
+      const p = new Printer(mockAdapter, { width: 48 });
+      p.font('A');
+      expect(p.width).toBe(48);
+    });
+  });
+
+  describe('invalid arguments', () => {
+    it('should throw for invalid align', () => {
+      expect(() => printer.align('xx')).toThrow(/invalid align|LT|CT|RT/i);
+    });
+    it('should throw for invalid control', () => {
+      expect(() => printer.control('xx')).toThrow(/invalid ctrl|LF|GLF|FF/i);
+    });
+    it('should throw for invalid hardware', () => {
+      expect(() => printer.hardware('xx')).toThrow(/invalid hw|INIT|SELECT|RESET/i);
+    });
+    it('should throw for invalid font', () => {
+      expect(() => printer.font('X')).toThrow(/invalid family|A|B|C/i);
+    });
+  });
+
   describe('Legacy Printer Tests (Partial)', () => {
     it('should set center alignment', () => {
       printer.align('ct');

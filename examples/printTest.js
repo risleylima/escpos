@@ -38,20 +38,21 @@ const print = async (printer, n) => {
 (async () => {
   const vid = 1046;
   const pid = 20497;
-  await USB.connect(vid, pid);
-  const printerDevice = new Printer(USB, {
+  const adapter = new USB();
+  await adapter.connect(vid, pid);
+  const printerDevice = new Printer(adapter, {
     encoding: 'utf8',
     width: 48,
     profile: 'default',
   });
 
   for (let i = 0; i < 3; i++) {
-    await USB.open();
+    await adapter.open();
     await print(printerDevice, i);
     debug('Printed ' + i + ' of ' + 3);
-    await USB.close();
+    await adapter.close();
   }
-  await USB.disconnect();
+  await adapter.disconnect();
   process.exit();
 })().catch(e => {
   debug(e);

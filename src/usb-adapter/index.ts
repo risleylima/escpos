@@ -1,6 +1,6 @@
 import * as os from 'os';
 import { Adapter } from '../adapter';
-import { usb, Device, OutEndpoint } from 'usb';
+import { usb, Device, OutEndpoint, InEndpoint } from 'usb';
 
 const debug = require('debug')('escpos:usb-adapter') as (msg: string, ...args: unknown[]) => void;
 
@@ -13,10 +13,13 @@ const IFACE_CLASS = {
 
 const NOT_CONNECTED_MSG = 'Not connected. Call connect([vid], [pid]) first.';
 const CHUNK_SIZE = 4096; // 4KB chunks for USB stability
+const READ_BUFFER_SIZE = 64; // bytes for status response (DLE EOT, etc.)
+const RECOVER_DELAY_MS = 150;
 
 export class USB extends Adapter {
   private device: Device | null = null;
   private endpoint: OutEndpoint | null = null;
+  private inEndpoint: InEndpoint | null = null;
   private detachHandler: ((device: Device) => void) | null = null;
   private lastVid?: number;
   private lastPid?: number;
@@ -73,6 +76,7 @@ export class USB extends Adapter {
       this.lastPid = pid;
       this.device = null;
       this.endpoint = null;
+      this.inEndpoint = null;
 
       if (this.detachHandler) {
         usb.removeListener('detach', this.detachHandler);
@@ -112,6 +116,7 @@ export class USB extends Adapter {
           this.emit('detach');
           this.device = null;
           this.endpoint = null;
+          this.inEndpoint = null;
           this.state = 'DISCONNECTED';
         }
       };
@@ -152,11 +157,15 @@ export class USB extends Adapter {
           for (const endpoint of interfaceObj.endpoints) {
             if (endpoint.direction === 'out') {
               this.endpoint = endpoint as OutEndpoint;
-              this.state = 'READY';
-              this.emit('open', this.device);
-              debug('Device Opened!');
-              break;
+            } else if (endpoint.direction === 'in') {
+              this.inEndpoint = endpoint as InEndpoint;
             }
+          }
+          if (this.endpoint) {
+            this.state = 'READY';
+            this.emit('open', this.device);
+            debug('Device Opened!');
+            break;
           }
         } catch (e) {
           debug('Could not claim USB interface: ', e);
@@ -176,30 +185,21 @@ export class USB extends Adapter {
   async write(data: Buffer): Promise<boolean> {
     return this.synchronized(async () => {
       if (!this.device || !this.endpoint) throw new Error(NOT_CONNECTED_MSG);
-      
-      const prevState = this.state;
-      this.state = 'BUSY';
-
-      try {
-        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-          const chunk = data.subarray(i, i + CHUNK_SIZE);
-          try {
+      const writeOneWithRetry = async (chunk: Buffer): Promise<void> => {
+        try {
+          await this.writeChunk(chunk);
+        } catch (e) {
+          const msg = (e as Error).message ?? '';
+          if (/STALL/i.test(msg)) {
+            debug('USB endpoint stalled, attempting clearHalt + retry');
+            await this.clearEndpointHalt();
             await this.writeChunk(chunk);
-          } catch (e) {
-            const msg = (e as Error).message ?? '';
-            if (/STALL/i.test(msg)) {
-              debug('USB endpoint stalled, attempting clearHalt + retry');
-              await this.clearEndpointHalt();
-              await this.writeChunk(chunk);
-            } else {
-              throw e;
-            }
+          } else {
+            throw e;
           }
         }
-        return true;
-      } finally {
-        this.state = prevState === 'BUSY' ? 'READY' : prevState;
-      }
+      };
+      return this.writeInChunks(data, CHUNK_SIZE, writeOneWithRetry);
     });
   }
 
@@ -231,7 +231,22 @@ export class USB extends Adapter {
   }
 
   async read(): Promise<Buffer> {
-    throw new Error('Read not supported for USB adapter yet.');
+    return this.synchronized(async () => {
+      if (!this.device || !this.endpoint) throw new Error(NOT_CONNECTED_MSG);
+      if (!this.inEndpoint) {
+        throw new Error('Read not supported: printer has no IN endpoint.');
+      }
+      return new Promise<Buffer>((resolve, reject) => {
+        this.inEndpoint!.transfer(READ_BUFFER_SIZE, (err, data) => {
+          if (err) {
+            debug('USB read error: ', err);
+            reject(err);
+          } else {
+            resolve(data && data.length > 0 ? Buffer.from(data) : Buffer.alloc(0));
+          }
+        });
+      });
+    });
   }
 
   async close(): Promise<boolean> {
@@ -254,6 +269,7 @@ export class USB extends Adapter {
 
       const closedDevice = this.device;
       this.endpoint = null;
+      this.inEndpoint = null;
       this.device = null;
       this.state = 'DISCONNECTED';
 
@@ -284,16 +300,9 @@ export class USB extends Adapter {
     } catch (e) {
       debug('clearEndpointHalt failed during recover: ', e);
     }
-
-    try {
-      await this.close();
-    } catch (e) {
-      debug('close failed during recover: ', e);
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    await this.connect(this.lastVid, this.lastPid);
-    await this.open();
-    return true;
+    return this.recoverAfterClose(RECOVER_DELAY_MS, async () => {
+      await this.connect(this.lastVid, this.lastPid);
+      await this.open();
+    });
   }
 }

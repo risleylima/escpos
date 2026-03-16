@@ -93,22 +93,22 @@ class SpecBuffer {
     this.maxSize = maxSize;
   }
 
-  write(data: Buffer | string, type: BufferEncoding | string = 'ascii'): void {
-    const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data, type as BufferEncoding);
-    if (this.currentSize + chunk.length > this.maxSize) {
+  private assertWithinLimit(additionalBytes: number): void {
+    if (this.currentSize + additionalBytes > this.maxSize) {
       throw new Error(`Printer buffer overflow: max size of ${this.maxSize} bytes reached.`);
     }
+  }
+
+  write(data: Buffer | string, type: BufferEncoding | string = 'ascii'): void {
+    const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data, type as BufferEncoding);
+    this.assertWithinLimit(chunk.length);
     this.chunks.push(chunk);
     this.currentSize += chunk.length;
   }
 
   prepend(data: Buffer): void {
     if (data.length === 0) return;
-    if (this.currentSize + data.length > this.maxSize) {
-      // In case of prepend during recovery, we might exceed limit if user doesn't clear.
-      // We still allow it but emit a warning as it's a critical path.
-      console.warn(`[escpos] Warning: Buffer limit exceeded during prepend operation.`);
-    }
+    this.assertWithinLimit(data.length);
     this.chunks.unshift(data);
     this.currentSize += data.length;
   }
@@ -124,6 +124,11 @@ class SpecBuffer {
   size(): number {
     return this.currentSize;
   }
+}
+
+/** Convert string or Buffer to Buffer (DRY for print, println). */
+function toBuffer(content: string | Buffer, encoding: BufferEncoding | string = 'ascii'): Buffer {
+  return Buffer.isBuffer(content) ? content : Buffer.from(content, encoding as BufferEncoding);
 }
 
 /** Normalize "options or encoding as 3rd/4th param" pattern (DRY for lineItem, total, etc.). */
@@ -252,19 +257,12 @@ export class Printer {
   }
 
   print(content: string | Buffer): this {
-    this.buffer.write(
-      Buffer.isBuffer(content) ? content : Buffer.from(content, 'ascii')
-    );
+    this.buffer.write(toBuffer(content));
     return this;
   }
 
   println(content: string | Buffer): this {
-    this.buffer.write(
-      Buffer.concat([
-        Buffer.isBuffer(content) ? content : Buffer.from(content, 'ascii'),
-        this.commands.EOL,
-      ])
-    );
+    this.buffer.write(Buffer.concat([toBuffer(content), this.commands.EOL]));
     return this;
   }
 
@@ -969,6 +967,9 @@ export class Printer {
    */
   async getStatus(type: 'PRINTER' | 'OFFLINE' | 'ERROR' | 'PAPER' = 'PRINTER'): Promise<Buffer> {
     return this.enqueueIo(async () => {
+      if (typeof this.adapter.read !== 'function') {
+        throw new Error('Read not supported');
+      }
       const n = this.commands.STATUS[type];
       await this.adapter.write(this.commands.STATUS.DLE_EOT(n));
       return this.adapter.read();

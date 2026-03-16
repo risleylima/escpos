@@ -13,8 +13,10 @@ export function numToHexString(value: number | string): string {
   return retorno;
 }
 
+const LF = Buffer.from('0A', 'hex');
+
 export const commands = {
-  LF: Buffer.from('0A', 'hex'),
+  LF,
   FS: Buffer.from('1C', 'hex'),
   FF: Buffer.from('0C', 'hex'),
   GS: Buffer.from('1D', 'hex'),
@@ -26,7 +28,7 @@ export const commands = {
   EOL: Buffer.from('\n', 'ascii'),
 
   FEED_CONTROL_SEQUENCES: {
-    CTL_LF: Buffer.from('0A', 'hex'),
+    CTL_LF: LF,
     CTL_GLF: Buffer.from('4A00', 'hex'),
     CTL_FF: Buffer.from('0C', 'hex'),
     CTL_CR: Buffer.from('0D', 'hex'),

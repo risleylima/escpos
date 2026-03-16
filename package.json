@@ -1,6 +1,6 @@
 {
   "name": "@risleylima/escpos",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Node.js thermal printer library: ESC/POS, receipts, barcodes, images via USB or Serial",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -44,12 +44,20 @@
     "escpos",
     "thermal-printer",
     "receipt-printer",
+    "bematech",
+    "elgin",
+    "daruma",
+    "epson",
+    "pdv",
     "pos",
+    "receipt",
+    "node",
+    "nodejs",
     "usb",
     "serial",
-    "nodejs",
+    "network",
     "barcode",
-    "receipt",
+    "qrcode",
     "typescript"
   ],
   "bugs": {
@@ -69,6 +77,7 @@
   },
   "files": [
     "dist",
+    "assets",
     "README.md"
   ]
 }

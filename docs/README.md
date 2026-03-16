@@ -2,6 +2,8 @@
 
 This directory contains accumulated knowledge and technical specifications to ensure the industrial-grade reliability of this library.
 
+**🇧🇷 Documentação em português (pt-BR):** [Clique aqui para a versão em português](./pt-BR/README.md)
+
 ## Knowledge Structure
 
 ### Recent hardening highlights

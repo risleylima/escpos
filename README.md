@@ -3,7 +3,9 @@
 [![npm version](https://img.shields.io/npm/v/@risleylima/escpos.svg)](https://www.npmjs.com/package/@risleylima/escpos)
 [![Node.js](https://img.shields.io/node/v/@risleylima/escpos.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-177%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-239%20passed-brightgreen.svg)]()
+
+**🇧🇷 Documentação em português:** [README.pt-BR.md](./README.pt-BR.md) • [Documentação técnica (pt-BR)](./docs/pt-BR/README.md)
 
 **The definitive thermal printing library for Node.js.** — Industrial-grade robustness, O(n) performance, and a fully agnostic architecture.
 
@@ -173,7 +175,7 @@ registerProfile({ id: 'my-model', name: 'My Model', defaultPaperWidth: 42 });
 
 ## ✅ Reliability
 
-- **177+ Unit and Integration Tests.**
+- **239+ Unit and Integration Tests.**
 - **TypeScript Strict:** Type safety for the entire command set.
 - **Spec-Validated:** Aligned with official Epson and manufacturer manuals.
 - **Transactional flush:** On write failure, the buffer is preserved so you can retry or log; call `printer.recover()` after transport errors before resuming prints.

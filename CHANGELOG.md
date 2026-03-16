@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-03-16
+
+### Added
+- **USB adapter read support:** When the printer exposes a USB IN endpoint, `read()` and `getStatus()` work. If no IN endpoint exists, `read()` throws with a clear message. Network and Serial always support read.
+- **Documentation in pt-BR:** `README.pt-BR.md` and `docs/pt-BR/` with Portuguese translations of COMMANDS_API and COMMANDS_RECIPES. Links in main README and docs index for Brazilian developers.
+- **SEO keywords:** `bematech`, `elgin`, `daruma`, `epson`, `pdv`, `node` in package.json for discoverability on npm and search engines.
+- **Assets in package:** `assets/` folder added to package `files` for logo variants used by integrations and examples.
+- **Encoding tests:** Unit tests for cp860, unknown encoding fallback, empty string, latin1 native path, and chars outside BMP (emoji).
+
+### Changed
+- **DRY refactoring:** SpecBuffer overflow logic extracted to `assertWithinLimit()`; `toBuffer()` helper for print/println; adapters use `writeInChunks()` and `recoverAfterClose()` base helpers; commands `CTL_LF` now references `LF` to avoid duplication.
+- **Adapter documentation:** AdapterLike JSDoc updated to reflect USB read behavior (implements when IN endpoint exists, throws otherwise).
+- **COMMANDS_API.md:** Note that `getStatus()` requires adapter read support (Network/Serial always; USB when device has IN endpoint).
+- **examples/printTest.js:** Fixed to use adapter instance instead of class (correct lifecycle: connect, open, close, disconnect).
+- **README:** Test badge updated to 239 passed; Reliability section updated.
+
+### Fixed
+- **Adapter recover deadlock:** Removed `synchronized` from adapter `recover()` overrides to prevent deadlock when recover called `close()` (which also uses synchronized).
+- **SpecBuffer:** Consistent overflow handling between `write()` and `prepend()` via shared helper.
+
 ## [1.0.5] - 2026-03-12
 
 ### Added

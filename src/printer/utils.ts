@@ -33,10 +33,18 @@ export function textLength(str: string): number {
   return Array.from(str).reduce((accLen, char) => accLen + charLength(char), 0);
 }
 
+/**
+ * Returns a substring of str by column range (e.g. for thermal printer line width).
+ * Columns are 1 for ASCII, 2 for CJK/wide/emoji. Interval is [start, end) in column indices:
+ * a character is included when its column span overlaps that range.
+ *
+ * @param str - Source string (code-point safe)
+ * @param start - Start column (inclusive)
+ * @param end - End column (exclusive); omitted = to end of string
+ */
 export function textSubstring(str: string, start: number, end?: number): string {
   let accLen = 0;
   let result = '';
-  // Iterate over code points correctly
   for (const char of Array.from(str)) {
     const len = charLength(char);
     if (accLen + len > start && (end === undefined || accLen + len <= end)) {

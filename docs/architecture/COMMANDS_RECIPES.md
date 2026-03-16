@@ -140,11 +140,44 @@ const logo = await Image.load('./assets/logo.png');
 printer
   .align('ct')
   .raster(logo, 'normal')
+  .feed(1)   // optional: some printers need a feed after raster before more data
   .align('lt')
   .newLine();
 ```
 
 Supported `Image.load(...)` formats include PNG (Adam7), BMP, JPEG, GIF, and SVG.
+
+### Header with optional logo (avoid breaking the chain)
+
+If you use a ternary to choose between logo and text, keep the chain on a single `printer` reference so `.feed(1)` and later commands are not lost. Prefer one of these patterns:
+
+```ts
+// Option A: assign the result of the branch and then chain
+printer
+  .encode('cp850')
+  .align('ct')
+  .textln('Bem vindo ao');
+
+(logoImage ? printer.raster(logoImage) : printer.style('b').textln(' Complexo Paraná Park!').style('normal'))
+  .feed(1)
+  .align('lt');
+// ... rest of ticket
+```
+
+```ts
+// Option B: no ternary in the middle; add logo or text in two steps (clearer, no parsing quirks)
+printer.encode('cp850').align('ct').textln('Bem vindo ao');
+
+if (logoImage) {
+  printer.raster(logoImage);
+} else {
+  printer.style('b').textln(' Complexo Paraná Park!').style('normal');
+}
+printer.feed(1).align('lt');
+// ... rest of ticket
+```
+
+Some firmwares pause after a large raster; adding `.feed(1)` (or even `.feed(2)`) right after `.raster(logo)` can help the printer accept the next commands.
 
 ---
 

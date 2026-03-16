@@ -99,4 +99,31 @@ describe('Network Adapter', () => {
     expect(first.end).toHaveBeenCalled();
     expect(net.createConnection).toHaveBeenCalledTimes(2);
   });
+
+  it('should accept connect with options object { host, port, timeout }', async () => {
+    const adapter = new NetworkClass();
+    const result = await adapter.connect({ host: '192.168.1.1', port: 9100, timeout: 5000 });
+    expect(result).toBe(true);
+    await adapter.open();
+    expect(net.createConnection).toHaveBeenCalledWith(
+      { host: '192.168.1.1', port: 9100 },
+      expect.any(Function)
+    );
+  });
+
+  it('should close existing socket then allow open to new host/port after connect(different)', async () => {
+    const adapter = new NetworkClass();
+    await adapter.connect('127.0.0.1', 9100);
+    await adapter.open();
+    const firstSocket = global.mockSockets[global.mockSockets.length - 1].socket;
+    await adapter.close();
+    expect(firstSocket.end).toHaveBeenCalled();
+    await adapter.connect('127.0.0.2', 9200);
+    await adapter.open();
+    expect(global.mockSockets.length).toBe(2);
+    expect(net.createConnection).toHaveBeenCalledWith(
+      { host: '127.0.0.2', port: 9200 },
+      expect.any(Function)
+    );
+  });
 });

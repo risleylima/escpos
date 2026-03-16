@@ -1,14 +1,21 @@
 'use strict';
 
+/**
+ * Tests use the global profile registry (registerProfile/getProfile).
+ * Tests that register profiles ('test-p', 'dup', 'overwrite-me') leave them in the registry;
+ * other tests do not depend on those ids being absent.
+ */
 const {
   getProfile,
   listProfiles,
   registerProfile,
   getCommandsForProfile,
+  createProfileRegistry,
   defaultProfile,
   customVkp80iiiProfile,
 } = require('../../../dist/printer/profiles');
 const { bematechMp4200thProfile } = require('../../../dist/printer/profiles/bematech/mp4200th');
+const { Printer } = require('../../../dist');
 
 describe('Printer profiles', () => {
   describe('getProfile', () => {
@@ -191,6 +198,32 @@ describe('Printer profiles', () => {
       expect(hex).toContain('1b6100'); // align left
       expect(hex).toContain('1b32'); // line spacing default
       expect(hex).toContain('1b4d00'); // font A
+    });
+  });
+
+  describe('createProfileRegistry and isolated Printer', () => {
+    it('should create registry with initial profiles and resolve by id', () => {
+      const isolated = createProfileRegistry([defaultProfile, { id: 'isolated-one', name: 'Isolated One' }]);
+      expect(isolated.getProfile('default')).toBeDefined();
+      expect(isolated.getProfile('isolated-one')).toMatchObject({ id: 'isolated-one', name: 'Isolated One' });
+      expect(isolated.getProfile('custom-vkp80iii')).toBeUndefined();
+    });
+
+    it('should allow Printer to use profileRegistry and not affect global registry', () => {
+      const isolated = createProfileRegistry([
+        { id: 'my-printer', name: 'My Printer', defaultPaperWidth: 56 },
+      ]);
+      const mockAdapter = { write: jest.fn().mockResolvedValue(true), close: jest.fn().mockResolvedValue(true) };
+      const p = new Printer(mockAdapter, { profile: 'my-printer', profileRegistry: isolated });
+      expect(p.width).toBe(56);
+      expect(p.profile.id).toBe('my-printer');
+      expect(getProfile('my-printer')).toBeUndefined();
+    });
+
+    it('should throw when profile id not found in provided profileRegistry', () => {
+      const isolated = createProfileRegistry([defaultProfile]);
+      const mockAdapter = { write: jest.fn().mockResolvedValue(true), close: jest.fn().mockResolvedValue(true) };
+      expect(() => new Printer(mockAdapter, { profile: 'custom-vkp80iii', profileRegistry: isolated })).toThrow(/Unknown profile/);
     });
   });
 });

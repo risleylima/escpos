@@ -96,6 +96,12 @@ describe('Serial Adapter', () => {
       const mockPort = SerialPort.mock.results[0].value;
       expect(mockPort.open).toHaveBeenCalled();
     });
+
+    it('should reject when configured port is not in listSerial', async () => {
+      await adapter.connect('/dev/ttyNOTEXIST');
+      SerialPort.list.mockResolvedValueOnce([{ path: '/dev/ttyUSB0' }, { path: '/dev/ttyUSB1' }]);
+      await expect(adapter.open()).rejects.toThrow(/port does not exist|specified port|not found/i);
+    });
   });
 
   describe('write', () => {

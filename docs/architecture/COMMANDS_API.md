@@ -254,7 +254,7 @@ Use `raw(...)` only when you need command-level control not exposed by the high-
 |---|---|---|
 | `flush()` | `Promise<this>` | Sends current buffer. On write failure, payload is prepended back (transactional behavior). |
 | `close(options?)` | `Promise<this>` | Flushes pending buffer then closes adapter. `options`: `{ timeout?: number }`. |
-| `getStatus(type?)` | `Promise<Buffer>` | Reads real-time status (`PRINTER`, `OFFLINE`, `ERROR`, `PAPER`). |
+| `getStatus(type?)` | `Promise<Buffer>` | Reads real-time status (`PRINTER`, `OFFLINE`, `ERROR`, `PAPER`). Requires adapter that supports read (Network/Serial always; USB only when device has IN endpoint). |
 | `recover(options?)` | `Promise<RecoverResult>` | Adapter recover + profile/global printer baseline reset. |
 
 `RecoverOptions`:

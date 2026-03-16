@@ -6,6 +6,7 @@ const debug = require('debug')('escpos:serial-adapter') as (msg: string, ...args
 const NOT_CONNECTED_MSG = 'Not connected. Call connect(port[, options]) first.';
 const CHUNK_SIZE = 4096; // 4KB chunks for RS232 stability
 const DEFAULT_BAUD_RATE = 9600;
+const RECOVER_DELAY_MS = 120;
 
 export class Serial extends Adapter {
   private port: SerialPort | null = null;
@@ -91,19 +92,7 @@ export class Serial extends Adapter {
   async write(data: Buffer): Promise<boolean> {
     return this.synchronized(async () => {
       if (!this.port || !this.port.isOpen) throw new Error(NOT_CONNECTED_MSG);
-      
-      const prevState = this.state;
-      this.state = 'BUSY';
-
-      try {
-        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-          const chunk = data.subarray(i, i + CHUNK_SIZE);
-          await this.writeChunk(chunk);
-        }
-        return true;
-      } finally {
-        this.state = prevState === 'BUSY' ? 'READY' : prevState;
-      }
+      return this.writeInChunks(data, CHUNK_SIZE, (chunk) => this.writeChunk(chunk));
     });
   }
 
@@ -184,19 +173,10 @@ export class Serial extends Adapter {
    * 2) reopen using last configured path/options
    */
   async recover(): Promise<boolean> {
-    try {
-      await this.close();
-    } catch (e) {
-      debug('close failed during serial recover: ', e);
-    }
-
     if (!this.path) {
       this.state = 'DISCONNECTED';
       return true;
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    await this.open();
-    return true;
+    return this.recoverAfterClose(RECOVER_DELAY_MS, () => this.open());
   }
 }

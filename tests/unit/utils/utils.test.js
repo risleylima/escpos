@@ -53,4 +53,32 @@ describe('Utils', () => {
       expect(utils.textLength(chinese)).toBe(4); // 2 chars * 2
     });
   });
+
+  describe('textSubstring', () => {
+    it('should return substring by column range (ASCII)', () => {
+      expect(utils.textSubstring('Hello', 0, 3)).toBe('Hel');
+      expect(utils.textSubstring('Hello', 1, 4)).toBe('ell');
+      expect(utils.textSubstring('Hello', 0, 5)).toBe('Hello');
+    });
+
+    it('should handle multi-byte characters as 2 columns', () => {
+      const s = 'A你B';
+      expect(utils.textSubstring(s, 0, 2)).toBe('A');
+      // Columns 2-4: 你 (cols 1-2) + B (col 3)
+      expect(utils.textSubstring(s, 2, 4)).toBe('你B');
+      // Column 3 only: B (implementation uses accLen+len > start, so (3,4) yields B)
+      expect(utils.textSubstring(s, 3, 4)).toBe('B');
+      expect(utils.textSubstring(s, 0, 5)).toBe('A你B');
+    });
+
+    it('should support end omitted (to end of string)', () => {
+      expect(utils.textSubstring('Hello', 2)).toBe('llo');
+      expect(utils.textSubstring('Hi', 0)).toBe('Hi');
+    });
+
+    it('should return empty when start >= length', () => {
+      expect(utils.textSubstring('Hi', 5)).toBe('');
+      expect(utils.textSubstring('你', 2)).toBe('');
+    });
+  });
 });

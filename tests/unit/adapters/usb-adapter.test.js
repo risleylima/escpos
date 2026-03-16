@@ -200,4 +200,15 @@ describe('USB Adapter', () => {
       expect(mockDevice.interfaces[0].claim).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('read', () => {
+    beforeEach(async () => {
+      await adapter.connect(0x04b8, 0x0202);
+      await adapter.open();
+    });
+
+    it('should reject with not supported message', async () => {
+      await expect(adapter.read()).rejects.toThrow(/read not supported|Read not supported/i);
+    });
+  });
 });

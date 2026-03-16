@@ -14,6 +14,7 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 10000;
 const DEFAULT_CLOSE_TIMEOUT_MS = 2000;
 const DEFAULT_IO_TIMEOUT_MS = 30000;
 const CHUNK_SIZE = 8192; // 8KB chunks for industrial flow control
+const RECOVER_DELAY_MS = 100;
 
 export class Network extends Adapter {
   private socket: net.Socket | null = null;
@@ -107,20 +108,7 @@ export class Network extends Adapter {
   async write(data: Buffer): Promise<boolean> {
     return this.synchronized(async () => {
       if (!this.socket || this.socket.destroyed) throw new Error(NOT_CONNECTED_MSG);
-      
-      const prevState = this.state;
-      this.state = 'BUSY';
-
-      try {
-        // Industrial Chunking Implementation
-        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-          const chunk = data.subarray(i, i + CHUNK_SIZE);
-          await this.writeChunk(chunk);
-        }
-        return true;
-      } finally {
-        this.state = prevState === 'BUSY' ? 'READY' : prevState;
-      }
+      return this.writeInChunks(data, CHUNK_SIZE, (chunk) => this.writeChunk(chunk));
     });
   }
 
@@ -240,19 +228,10 @@ export class Network extends Adapter {
    * 2) reopen using last configured host/port
    */
   async recover(): Promise<boolean> {
-    try {
-      await this.close();
-    } catch (e) {
-      debug('close failed during network recover: %s', (e as Error).message);
-    }
-
     if (!this.options) {
       this.state = 'DISCONNECTED';
       return true;
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    await this.open();
-    return true;
+    return this.recoverAfterClose(RECOVER_DELAY_MS, () => this.open());
   }
 }
